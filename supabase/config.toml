@@ -217,9 +217,9 @@ otp_expiry = 3600
 enabled = true
 host = "smtp.gmail.com"
 port = 465
-user = "krishbahukhandi35@gmail.com"
-pass = "ekmx ddls txan ojch"
-admin_email = "krishbahukhandi35@gmail.com"
+user = "your_email@gmail.com"
+pass = "your_app_password_here"
+admin_email = "your_email@gmail.com"
 sender_name = "Tareshwar Tutorials"
 
 # Uncomment to customize email template
