@@ -86,20 +86,22 @@ class NotificationService {
   }) async {
     // Fetch all student IDs in this batch
     final members = await _client
-        .from('batch_members')
+        .from('enrollments')
         .select('student_id')
         .eq('batch_id', batchId);
 
     final inserts = members
-        .map((m) => {
-              'user_id': m['student_id'],
-              'title': title,
-              'body': body,
-              'type': 'announcement',
-              'reference_id': batchId,
-              'is_read': false,
-              'created_at': DateTime.now().toIso8601String(),
-            })
+        .map(
+          (m) => {
+            'user_id': m['student_id'],
+            'title': title,
+            'body': body,
+            'type': 'announcement',
+            'reference_id': batchId,
+            'is_read': false,
+            'created_at': DateTime.now().toIso8601String(),
+          },
+        )
         .toList();
 
     if (inserts.isNotEmpty) {

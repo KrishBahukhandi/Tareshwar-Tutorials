@@ -20,14 +20,27 @@ class TestService {
   }
 
   Future<List<TestModel>> fetchTests({String? courseId}) async {
-    var query = _client.from('tests').select();
+    final query = _client.from('tests').select();
     final List<Map<String, dynamic>> data;
     if (courseId != null) {
-      data = await query.eq('course_id', courseId).order('created_at', ascending: false);
+      final chapterRows = await _client
+          .from('chapters')
+          .select('id, subjects!inner(course_id)')
+          .eq('subjects.course_id', courseId);
+      final chapterIds = chapterRows.map((r) => r['id'] as String).toList();
+      if (chapterIds.isEmpty) return [];
+      data = await query
+          .inFilter('chapter_id', chapterIds)
+          .eq('is_published', true)
+          .order('created_at', ascending: false);
     } else {
-      data = await query.order('created_at', ascending: false);
+      data = await query
+          .eq('is_published', true)
+          .order('created_at', ascending: false);
     }
-    return data.map((t) => TestModel.fromJson(Map<String, dynamic>.from(t))).toList();
+    return data
+        .map((t) => TestModel.fromJson(Map<String, dynamic>.from(t)))
+        .toList();
   }
 
   Future<List<TestModel>> fetchTestsByChapter(String chapterId) async {
@@ -94,11 +107,7 @@ class TestService {
         if (s > best) best = s;
         sum += s;
       }
-      return {
-        'best': best,
-        'avg': sum / data.length,
-        'total': data.length,
-      };
+      return {'best': best, 'avg': sum / data.length, 'total': data.length};
     } catch (_) {
       return {'best': 0, 'avg': 0.0, 'total': 0};
     }
@@ -127,13 +136,19 @@ class TestService {
           .eq('student_id', studentId)
           .order('attempted_at', ascending: false);
     } else if (testId != null) {
-      data = await query.eq('test_id', testId).order('attempted_at', ascending: false);
+      data = await query
+          .eq('test_id', testId)
+          .order('attempted_at', ascending: false);
     } else if (studentId != null) {
-      data = await query.eq('student_id', studentId).order('attempted_at', ascending: false);
+      data = await query
+          .eq('student_id', studentId)
+          .order('attempted_at', ascending: false);
     } else {
       data = await query.order('attempted_at', ascending: false);
     }
-    return data.map((a) => TestAttemptModel.fromJson(Map<String, dynamic>.from(a))).toList();
+    return data
+        .map((a) => TestAttemptModel.fromJson(Map<String, dynamic>.from(a)))
+        .toList();
   }
 
   Future<TestAttemptModel> submitAttempt({
@@ -148,7 +163,11 @@ class TestService {
     int wrong = 0;
     int skipped = 0;
 
-    final testData = await _client.from('tests').select('negative_marks').eq('id', testId).single();
+    final testData = await _client
+        .from('tests')
+        .select('negative_marks')
+        .eq('id', testId)
+        .single();
     final negMarks = (testData['negative_marks'] as num).toDouble();
 
     for (final q in questions) {
@@ -195,7 +214,9 @@ class TestService {
         .order('score', ascending: false)
         .limit(50);
     return data
-        .map((a) => TestAttemptModel.fromJson(Map<String, dynamic>.from(a as Map)))
+        .map(
+          (a) => TestAttemptModel.fromJson(Map<String, dynamic>.from(a as Map)),
+        )
         .toList();
   }
 
@@ -207,13 +228,17 @@ class TestService {
     required int totalMarks,
     double negativeMarks = 0.25,
   }) async {
-    final data = await _client.from('tests').insert({
-      'chapter_id': chapterId,
-      'title': title,
-      'duration_minutes': durationMinutes,
-      'total_marks': totalMarks,
-      'negative_marks': negativeMarks,
-    }).select().single();
+    final data = await _client
+        .from('tests')
+        .insert({
+          'chapter_id': chapterId,
+          'title': title,
+          'duration_minutes': durationMinutes,
+          'total_marks': totalMarks,
+          'negative_marks': negativeMarks,
+        })
+        .select()
+        .single();
     return TestModel.fromJson(data);
   }
 

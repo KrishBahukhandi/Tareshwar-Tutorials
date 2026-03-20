@@ -4,18 +4,16 @@
 //  creation within the Content Upload module.
 // ─────────────────────────────────────────────────────────────
 import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/models.dart';
+import '../../../shared/services/auth_service.dart';
 import '../data/content_upload_repository.dart';
-
-// ═════════════════════════════════════════════════════════════
-//  SHARED FORM STATE
-// ═════════════════════════════════════════════════════════════
 
 class FormAsyncState {
   final bool isSubmitting;
-  final double uploadProgress;  // 0.0 – 1.0 (used for file uploads)
+  final double uploadProgress;
   final String? error;
   final bool success;
 
@@ -31,50 +29,45 @@ class FormAsyncState {
     double? uploadProgress,
     String? error,
     bool? success,
-  }) =>
-      FormAsyncState(
-        isSubmitting: isSubmitting ?? this.isSubmitting,
-        uploadProgress: uploadProgress ?? this.uploadProgress,
-        error: error,
-        success: success ?? this.success,
-      );
+  }) => FormAsyncState(
+    isSubmitting: isSubmitting ?? this.isSubmitting,
+    uploadProgress: uploadProgress ?? this.uploadProgress,
+    error: error,
+    success: success ?? this.success,
+  );
 }
-
-// ═════════════════════════════════════════════════════════════
-//  SUBJECTS LIST  (per course)
-// ═════════════════════════════════════════════════════════════
 
 final subjectsListProvider = FutureProvider.autoDispose
     .family<List<SubjectModel>, String>((ref, courseId) async {
-  return ref.read(contentUploadRepoProvider).fetchSubjects(courseId);
-});
-
-// ═════════════════════════════════════════════════════════════
-//  CHAPTERS LIST  (per subject)
-// ═════════════════════════════════════════════════════════════
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) return [];
+      return ref
+          .read(contentUploadRepoProvider)
+          .fetchSubjects(courseId, teacherId: teacherId);
+    });
 
 final chaptersListProvider = FutureProvider.autoDispose
     .family<List<ChapterModel>, String>((ref, subjectId) async {
-  return ref.read(contentUploadRepoProvider).fetchChapters(subjectId);
-});
-
-// ═════════════════════════════════════════════════════════════
-//  LECTURES LIST  (per chapter)
-// ═════════════════════════════════════════════════════════════
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) return [];
+      return ref
+          .read(contentUploadRepoProvider)
+          .fetchChapters(subjectId, teacherId: teacherId);
+    });
 
 final lecturesListProvider = FutureProvider.autoDispose
     .family<List<LectureModel>, String>((ref, chapterId) async {
-  return ref.read(contentUploadRepoProvider).fetchLectures(chapterId);
-});
-
-// ═════════════════════════════════════════════════════════════
-//  CREATE SUBJECT NOTIFIER
-// ═════════════════════════════════════════════════════════════
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) return [];
+      return ref
+          .read(contentUploadRepoProvider)
+          .fetchLectures(chapterId, teacherId: teacherId);
+    });
 
 final createSubjectProvider =
     AutoDisposeNotifierProvider<CreateSubjectNotifier, FormAsyncState>(
-  CreateSubjectNotifier.new,
-);
+      CreateSubjectNotifier.new,
+    );
 
 class CreateSubjectNotifier extends AutoDisposeNotifier<FormAsyncState> {
   @override
@@ -85,14 +78,21 @@ class CreateSubjectNotifier extends AutoDisposeNotifier<FormAsyncState> {
     required String name,
     required int sortOrder,
   }) async {
+    final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (teacherId == null) {
+      state = const FormAsyncState(error: 'Not authenticated');
+      return;
+    }
     state = const FormAsyncState(isSubmitting: true);
     try {
-      await ref.read(contentUploadRepoProvider).createSubject(
+      await ref
+          .read(contentUploadRepoProvider)
+          .createSubject(
+            teacherId: teacherId,
             courseId: courseId,
             name: name,
             sortOrder: sortOrder,
           );
-      // Invalidate so the caller's list refreshes.
       ref.invalidate(subjectsListProvider(courseId));
       state = const FormAsyncState(success: true);
     } catch (e) {
@@ -103,14 +103,10 @@ class CreateSubjectNotifier extends AutoDisposeNotifier<FormAsyncState> {
   void reset() => state = const FormAsyncState();
 }
 
-// ═════════════════════════════════════════════════════════════
-//  CREATE CHAPTER NOTIFIER
-// ═════════════════════════════════════════════════════════════
-
 final createChapterProvider =
     AutoDisposeNotifierProvider<CreateChapterNotifier, FormAsyncState>(
-  CreateChapterNotifier.new,
-);
+      CreateChapterNotifier.new,
+    );
 
 class CreateChapterNotifier extends AutoDisposeNotifier<FormAsyncState> {
   @override
@@ -121,9 +117,17 @@ class CreateChapterNotifier extends AutoDisposeNotifier<FormAsyncState> {
     required String name,
     required int sortOrder,
   }) async {
+    final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (teacherId == null) {
+      state = const FormAsyncState(error: 'Not authenticated');
+      return;
+    }
     state = const FormAsyncState(isSubmitting: true);
     try {
-      await ref.read(contentUploadRepoProvider).createChapter(
+      await ref
+          .read(contentUploadRepoProvider)
+          .createChapter(
+            teacherId: teacherId,
             subjectId: subjectId,
             name: name,
             sortOrder: sortOrder,
@@ -138,14 +142,10 @@ class CreateChapterNotifier extends AutoDisposeNotifier<FormAsyncState> {
   void reset() => state = const FormAsyncState();
 }
 
-// ═════════════════════════════════════════════════════════════
-//  UPLOAD LECTURE NOTIFIER
-// ═════════════════════════════════════════════════════════════
-
 final uploadLectureProvider =
     AutoDisposeNotifierProvider<UploadLectureNotifier, FormAsyncState>(
-  UploadLectureNotifier.new,
-);
+      UploadLectureNotifier.new,
+    );
 
 class UploadLectureNotifier extends AutoDisposeNotifier<FormAsyncState> {
   @override
@@ -164,9 +164,17 @@ class UploadLectureNotifier extends AutoDisposeNotifier<FormAsyncState> {
     bool isFree = false,
     int sortOrder = 0,
   }) async {
+    final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (teacherId == null) {
+      state = const FormAsyncState(error: 'Not authenticated');
+      return;
+    }
     state = const FormAsyncState(isSubmitting: true, uploadProgress: 0.0);
     try {
-      await ref.read(contentUploadRepoProvider).createLecture(
+      await ref
+          .read(contentUploadRepoProvider)
+          .createLecture(
+            teacherId: teacherId,
             chapterId: chapterId,
             courseId: courseId,
             title: title,

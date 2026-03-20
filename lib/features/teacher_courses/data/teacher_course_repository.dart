@@ -9,20 +9,149 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/models.dart';
 import '../../../shared/services/supabase_service.dart';
 
-final teacherCourseRepoProvider =
-    Provider<TeacherCourseRepository>((ref) {
+final teacherCourseRepoProvider = Provider<TeacherCourseRepository>((ref) {
   return TeacherCourseRepository(ref.watch(supabaseClientProvider));
 });
+
+class TeacherCourseStats {
+  final int subjectCount;
+  final int chapterCount;
+  final int lectureCount;
+  final int batchCount;
+  final int enrollmentCount;
+
+  const TeacherCourseStats({
+    required this.subjectCount,
+    required this.chapterCount,
+    required this.lectureCount,
+    required this.batchCount,
+    required this.enrollmentCount,
+  });
+
+  bool get canPublish => lectureCount > 0;
+  bool get canDelete =>
+      subjectCount == 0 && batchCount == 0 && enrollmentCount == 0;
+}
 
 class TeacherCourseRepository {
   final SupabaseClient _db;
   TeacherCourseRepository(this._db);
 
+  Future<void> _requireTeacherOwnsCourse(
+    String courseId,
+    String teacherId,
+  ) async {
+    final course = await _db
+        .from('courses')
+        .select('teacher_id')
+        .eq('id', courseId)
+        .maybeSingle();
+    if (course == null || course['teacher_id'] != teacherId) {
+      throw StateError('You do not have permission to manage this course.');
+    }
+  }
+
+  Future<String> _requireTeacherOwnsSubject(
+    String subjectId,
+    String teacherId,
+  ) async {
+    final subject = await _db
+        .from('subjects')
+        .select('course_id')
+        .eq('id', subjectId)
+        .maybeSingle();
+    if (subject == null) throw StateError('Subject not found.');
+    final courseId = subject['course_id'] as String;
+    await _requireTeacherOwnsCourse(courseId, teacherId);
+    return courseId;
+  }
+
+  Future<String> _requireTeacherOwnsChapter(
+    String chapterId,
+    String teacherId,
+  ) async {
+    final chapter = await _db
+        .from('chapters')
+        .select('subject_id')
+        .eq('id', chapterId)
+        .maybeSingle();
+    if (chapter == null) throw StateError('Chapter not found.');
+    final subjectId = chapter['subject_id'] as String;
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
+    return subjectId;
+  }
+
+  Future<String> _requireTeacherOwnsLecture(
+    String lectureId,
+    String teacherId,
+  ) async {
+    final lecture = await _db
+        .from('lectures')
+        .select('chapter_id')
+        .eq('id', lectureId)
+        .maybeSingle();
+    if (lecture == null) throw StateError('Lecture not found.');
+    final chapterId = lecture['chapter_id'] as String;
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
+    return chapterId;
+  }
+
+  Future<TeacherCourseStats> fetchCourseStats(
+    String courseId,
+    String teacherId,
+  ) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
+
+    final subjects = await _db
+        .from('subjects')
+        .select('id')
+        .eq('course_id', courseId);
+    final subjectIds = subjects.map((row) => row['id'] as String).toList();
+
+    List<Map<String, dynamic>> chapters = const [];
+    if (subjectIds.isNotEmpty) {
+      chapters = await _db
+          .from('chapters')
+          .select('id')
+          .inFilter('subject_id', subjectIds);
+    }
+    final chapterIds = chapters.map((row) => row['id'] as String).toList();
+
+    List<Map<String, dynamic>> lectures = const [];
+    if (chapterIds.isNotEmpty) {
+      lectures = await _db
+          .from('lectures')
+          .select('id')
+          .inFilter('chapter_id', chapterIds);
+    }
+
+    final batches = await _db
+        .from('batches')
+        .select('id')
+        .eq('course_id', courseId);
+    final batchIds = batches.map((row) => row['id'] as String).toList();
+
+    List<Map<String, dynamic>> enrollments = const [];
+    if (batchIds.isNotEmpty) {
+      enrollments = await _db
+          .from('enrollments')
+          .select('id')
+          .inFilter('batch_id', batchIds);
+    }
+
+    return TeacherCourseStats(
+      subjectCount: subjects.length,
+      chapterCount: chapters.length,
+      lectureCount: lectures.length,
+      batchCount: batches.length,
+      enrollmentCount: enrollments.length,
+    );
+  }
+
   // ════════════════════════════════════════════════════════
   //  COURSES
   // ════════════════════════════════════════════════════════
 
-  /// All courses owned by [teacherId], with denormalised counts.
   Future<List<CourseModel>> fetchMyCourses(String teacherId) async {
     final data = await _db
         .from('courses')
@@ -60,6 +189,7 @@ class TeacherCourseRepository {
   }
 
   Future<CourseModel> updateCourse({
+    required String teacherId,
     required String courseId,
     required String title,
     required String description,
@@ -67,6 +197,7 @@ class TeacherCourseRepository {
     String? thumbnailUrl,
     String? categoryTag,
   }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
         .from('courses')
         .update({
@@ -82,11 +213,33 @@ class TeacherCourseRepository {
     return CourseModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  Future<void> deleteCourse(String courseId) async {
+  Future<void> deleteCourse(
+    String courseId, {
+    required String teacherId,
+  }) async {
+    final stats = await fetchCourseStats(courseId, teacherId);
+    if (!stats.canDelete) {
+      throw StateError(
+        'This course cannot be deleted because it already has content or student-linked batch data.',
+      );
+    }
     await _db.from('courses').delete().eq('id', courseId);
   }
 
-  Future<void> togglePublish(String courseId, {required bool publish}) async {
+  Future<void> togglePublish(
+    String courseId, {
+    required String teacherId,
+    required bool publish,
+  }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
+    if (publish) {
+      final stats = await fetchCourseStats(courseId, teacherId);
+      if (!stats.canPublish) {
+        throw StateError(
+          'Add at least one lecture before publishing this course.',
+        );
+      }
+    }
     await _db
         .from('courses')
         .update({'is_published': publish})
@@ -97,32 +250,36 @@ class TeacherCourseRepository {
   //  SUBJECTS
   // ════════════════════════════════════════════════════════
 
-  Future<List<SubjectModel>> fetchSubjects(String courseId) async {
+  Future<List<SubjectModel>> fetchSubjects(
+    String courseId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
         .from('subjects')
         .select()
         .eq('course_id', courseId)
         .order('sort_order');
     return data
-        .map((j) => SubjectModel.fromJson({
-              ...Map<String, dynamic>.from(j),
-              'chapters': <dynamic>[],
-            }))
+        .map(
+          (j) => SubjectModel.fromJson({
+            ...Map<String, dynamic>.from(j),
+            'chapters': <dynamic>[],
+          }),
+        )
         .toList();
   }
 
   Future<SubjectModel> createSubject({
+    required String teacherId,
     required String courseId,
     required String name,
     required int sortOrder,
   }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
         .from('subjects')
-        .insert({
-          'course_id': courseId,
-          'name': name,
-          'sort_order': sortOrder,
-        })
+        .insert({'course_id': courseId, 'name': name, 'sort_order': sortOrder})
         .select()
         .single();
     return SubjectModel.fromJson({
@@ -132,10 +289,12 @@ class TeacherCourseRepository {
   }
 
   Future<SubjectModel> updateSubject({
+    required String teacherId,
     required String subjectId,
     required String name,
     required int sortOrder,
   }) async {
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
     final data = await _db
         .from('subjects')
         .update({'name': name, 'sort_order': sortOrder})
@@ -148,7 +307,20 @@ class TeacherCourseRepository {
     });
   }
 
-  Future<void> deleteSubject(String subjectId) async {
+  Future<void> deleteSubject(
+    String subjectId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
+    final chapters = await _db
+        .from('chapters')
+        .select('id')
+        .eq('subject_id', subjectId);
+    if (chapters.isNotEmpty) {
+      throw StateError(
+        'Delete or move this subject’s chapters before deleting the subject.',
+      );
+    }
     await _db.from('subjects').delete().eq('id', subjectId);
   }
 
@@ -156,25 +328,33 @@ class TeacherCourseRepository {
   //  CHAPTERS
   // ════════════════════════════════════════════════════════
 
-  Future<List<ChapterModel>> fetchChapters(String subjectId) async {
+  Future<List<ChapterModel>> fetchChapters(
+    String subjectId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
     final data = await _db
         .from('chapters')
         .select()
         .eq('subject_id', subjectId)
         .order('sort_order');
     return data
-        .map((j) => ChapterModel.fromJson({
-              ...Map<String, dynamic>.from(j),
-              'lectures': <dynamic>[],
-            }))
+        .map(
+          (j) => ChapterModel.fromJson({
+            ...Map<String, dynamic>.from(j),
+            'lectures': <dynamic>[],
+          }),
+        )
         .toList();
   }
 
   Future<ChapterModel> createChapter({
+    required String teacherId,
     required String subjectId,
     required String name,
     required int sortOrder,
   }) async {
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
     final data = await _db
         .from('chapters')
         .insert({
@@ -191,10 +371,12 @@ class TeacherCourseRepository {
   }
 
   Future<ChapterModel> updateChapter({
+    required String teacherId,
     required String chapterId,
     required String name,
     required int sortOrder,
   }) async {
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
     final data = await _db
         .from('chapters')
         .update({'name': name, 'sort_order': sortOrder})
@@ -207,7 +389,24 @@ class TeacherCourseRepository {
     });
   }
 
-  Future<void> deleteChapter(String chapterId) async {
+  Future<void> deleteChapter(
+    String chapterId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
+    final lectures = await _db
+        .from('lectures')
+        .select('id')
+        .eq('chapter_id', chapterId);
+    final tests = await _db
+        .from('tests')
+        .select('id')
+        .eq('chapter_id', chapterId);
+    if (lectures.isNotEmpty || tests.isNotEmpty) {
+      throw StateError(
+        'Delete this chapter’s lectures and tests before deleting the chapter.',
+      );
+    }
     await _db.from('chapters').delete().eq('id', chapterId);
   }
 
@@ -215,7 +414,11 @@ class TeacherCourseRepository {
   //  LECTURES
   // ════════════════════════════════════════════════════════
 
-  Future<List<LectureModel>> fetchLectures(String chapterId) async {
+  Future<List<LectureModel>> fetchLectures(
+    String chapterId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
     final data = await _db
         .from('lectures')
         .select()
@@ -227,6 +430,7 @@ class TeacherCourseRepository {
   }
 
   Future<LectureModel> createLecture({
+    required String teacherId,
     required String chapterId,
     required String title,
     String? description,
@@ -236,6 +440,7 @@ class TeacherCourseRepository {
     bool isFree = false,
     int sortOrder = 0,
   }) async {
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
     final data = await _db
         .from('lectures')
         .insert({
@@ -254,6 +459,7 @@ class TeacherCourseRepository {
   }
 
   Future<LectureModel> updateLecture({
+    required String teacherId,
     required String lectureId,
     required String title,
     String? description,
@@ -263,6 +469,7 @@ class TeacherCourseRepository {
     bool isFree = false,
     int sortOrder = 0,
   }) async {
+    await _requireTeacherOwnsLecture(lectureId, teacherId);
     final data = await _db
         .from('lectures')
         .update({
@@ -280,7 +487,11 @@ class TeacherCourseRepository {
     return LectureModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  Future<void> deleteLecture(String lectureId) async {
+  Future<void> deleteLecture(
+    String lectureId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsLecture(lectureId, teacherId);
     await _db.from('lectures').delete().eq('id', lectureId);
   }
 
@@ -288,12 +499,16 @@ class TeacherCourseRepository {
   //  ENROLLED STUDENTS
   // ════════════════════════════════════════════════════════
 
-  /// Returns list of enrolled students for a course (via batches → enrollments).
   Future<List<EnrolledStudentInfo>> fetchEnrolledStudents(
-      String courseId) async {
+    String courseId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
         .from('batches')
-        .select('id, batch_name, enrollments(student_id, enrolled_at, users!student_id(name, email, avatar_url))')
+        .select(
+          'id, batch_name, enrollments(student_id, enrolled_at, users!student_id(name, email, avatar_url))',
+        )
         .eq('course_id', courseId);
 
     final students = <EnrolledStudentInfo>[];
@@ -302,16 +517,18 @@ class TeacherCourseRepository {
       final enrollments = batch['enrollments'] as List<dynamic>? ?? [];
       for (final enr in enrollments) {
         final user = enr['users'] as Map<String, dynamic>?;
-        students.add(EnrolledStudentInfo(
-          studentId: enr['student_id'] as String,
-          name: user?['name'] as String? ?? 'Unknown',
-          email: user?['email'] as String? ?? '',
-          avatarUrl: user?['avatar_url'] as String?,
-          batchName: batchName,
-          enrolledAt: DateTime.tryParse(
-                  enr['enrolled_at'] as String? ?? '') ??
-              DateTime.now(),
-        ));
+        students.add(
+          EnrolledStudentInfo(
+            studentId: enr['student_id'] as String,
+            name: user?['name'] as String? ?? 'Unknown',
+            email: user?['email'] as String? ?? '',
+            avatarUrl: user?['avatar_url'] as String?,
+            batchName: batchName,
+            enrolledAt:
+                DateTime.tryParse(enr['enrolled_at'] as String? ?? '') ??
+                DateTime.now(),
+          ),
+        );
       }
     }
     return students;
@@ -321,22 +538,22 @@ class TeacherCourseRepository {
   //  FULL COURSE OUTLINE (subjects → chapters → lectures)
   // ════════════════════════════════════════════════════════
 
-  Future<List<SubjectModel>> fetchCourseOutline(String courseId) async {
+  Future<List<SubjectModel>> fetchCourseOutline(
+    String courseId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
         .from('subjects')
         .select('*, chapters(*, lectures(*))')
         .eq('course_id', courseId)
         .order('sort_order');
     return data
-        .map((j) =>
-            SubjectModel.fromJson(Map<String, dynamic>.from(j)))
+        .map((j) => SubjectModel.fromJson(Map<String, dynamic>.from(j)))
         .toList();
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Lightweight DTO for enrolled student display
-// ─────────────────────────────────────────────────────────────
 class EnrolledStudentInfo {
   final String studentId;
   final String name;

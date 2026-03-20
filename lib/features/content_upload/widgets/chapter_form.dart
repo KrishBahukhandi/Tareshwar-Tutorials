@@ -39,7 +39,8 @@ class _ChapterFormState extends State<ChapterForm> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final sortOrder = int.tryParse(_orderCtrl.text.trim()) ?? 1;
-    await widget.onSubmit(_nameCtrl.text.trim(), sortOrder);
+    final name = _nameCtrl.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    await widget.onSubmit(name, sortOrder);
   }
 
   @override
@@ -56,8 +57,12 @@ class _ChapterFormState extends State<ChapterForm> {
           TextFormField(
             controller: _nameCtrl,
             textCapitalization: TextCapitalization.words,
-            validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Name is required' : null,
+            validator: (v) {
+              final value = v?.trim() ?? '';
+              if (value.isEmpty) return 'Name is required';
+              if (value.length < 3) return 'Enter at least 3 characters';
+              return null;
+            },
             style: AppTextStyles.bodyMedium,
             decoration: const InputDecoration(
               hintText: 'e.g. Motion in a Straight Line',
@@ -76,13 +81,11 @@ class _ChapterFormState extends State<ChapterForm> {
             validator: (v) {
               if (v == null || v.trim().isEmpty) return null;
               final n = int.tryParse(v.trim());
-              if (n == null || n < 0) return 'Enter a valid number';
+              if (n == null || n < 1) return 'Enter 1 or more';
               return null;
             },
             style: AppTextStyles.bodyMedium,
-            decoration: const InputDecoration(
-              hintText: '1',
-            ),
+            decoration: const InputDecoration(hintText: '1'),
           ),
 
           const SizedBox(height: 24),
@@ -98,7 +101,9 @@ class _ChapterFormState extends State<ChapterForm> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2.2, color: Colors.white),
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Icon(Icons.check_rounded, size: 20),
               label: Text(
@@ -120,8 +125,10 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        text,
-        style: AppTextStyles.bodyMedium
-            .copyWith(fontWeight: FontWeight.w600, fontSize: 13),
-      );
+    text,
+    style: AppTextStyles.bodyMedium.copyWith(
+      fontWeight: FontWeight.w600,
+      fontSize: 13,
+    ),
+  );
 }

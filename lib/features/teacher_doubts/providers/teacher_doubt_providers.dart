@@ -1,16 +1,12 @@
 // ─────────────────────────────────────────────────────────────
 //  teacher_doubt_providers.dart
 //  Riverpod providers for the Teacher Doubt Management module.
-//  Reuses DoubtService from shared services layer.
 // ─────────────────────────────────────────────────────────────
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/models.dart';
+import '../../../shared/services/auth_service.dart';
 import '../../../shared/services/doubt_service.dart';
-
-// ═════════════════════════════════════════════════════════════
-//  FILTER ENUM
-// ═════════════════════════════════════════════════════════════
 
 enum TeacherDoubtFilter { all, pending, resolved }
 
@@ -27,51 +23,47 @@ extension TeacherDoubtFilterExt on TeacherDoubtFilter {
   }
 }
 
-// ═════════════════════════════════════════════════════════════
-//  LIST PROVIDERS
-// ═════════════════════════════════════════════════════════════
-
-/// All doubts across all lectures (teacher view).
-final teacherAllDoubtsProvider =
-    FutureProvider.autoDispose<List<DoubtModel>>((ref) async {
-  return ref.read(doubtServiceProvider).fetchDoubts();
+final teacherAllDoubtsProvider = FutureProvider.autoDispose<List<DoubtModel>>((
+  ref,
+) async {
+  final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+  if (teacherId == null) return [];
+  return ref.read(doubtServiceProvider).fetchTeacherDoubts(teacherId);
 });
 
-/// Doubts filtered to a specific course's lectures (optional).
-/// Pass null to fetch all doubts.
 final teacherDoubtsProvider = FutureProvider.autoDispose
     .family<List<DoubtModel>, String?>((ref, lectureId) async {
-  return ref.read(doubtServiceProvider).fetchDoubts(lectureId: lectureId);
-});
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) return [];
+      final doubts = await ref
+          .read(doubtServiceProvider)
+          .fetchTeacherDoubts(teacherId);
+      if (lectureId == null) return doubts;
+      return doubts.where((d) => d.lectureId == lectureId).toList();
+    });
 
-/// Single doubt detail — invalidated after teacher actions.
 final teacherDoubtDetailProvider = FutureProvider.autoDispose
     .family<DoubtModel, String>((ref, doubtId) async {
-  return ref.read(doubtServiceProvider).fetchDoubt(doubtId);
-});
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) {
+        throw StateError('You must be signed in as a teacher.');
+      }
+      return ref
+          .read(doubtServiceProvider)
+          .fetchTeacherDoubt(doubtId, teacherId);
+    });
 
-/// Realtime reply stream for a doubt (teacher view).
 final teacherRepliesStreamProvider = StreamProvider.autoDispose
     .family<List<DoubtReplyModel>, String>((ref, doubtId) {
-  return ref.read(doubtServiceProvider).repliesStream(doubtId);
-});
+      return ref.read(doubtServiceProvider).repliesStream(doubtId);
+    });
 
-// ═════════════════════════════════════════════════════════════
-//  UI STATE PROVIDERS
-// ═════════════════════════════════════════════════════════════
-
-/// Active filter on the teacher doubt list.
 final teacherDoubtFilterProvider =
     StateProvider.autoDispose<TeacherDoubtFilter>(
-        (_) => TeacherDoubtFilter.all);
+      (_) => TeacherDoubtFilter.all,
+    );
 
-/// Search query on the teacher doubt list.
-final teacherDoubtSearchProvider =
-    StateProvider.autoDispose<String>((_) => '');
-
-// ═════════════════════════════════════════════════════════════
-//  TEACHER REPLY NOTIFIER
-// ═════════════════════════════════════════════════════════════
+final teacherDoubtSearchProvider = StateProvider.autoDispose<String>((_) => '');
 
 class TeacherReplyState {
   final bool isSending;
@@ -84,11 +76,7 @@ class TeacherReplyState {
     this.error,
   });
 
-  TeacherReplyState copyWith({
-    bool? isSending,
-    bool? success,
-    String? error,
-  }) =>
+  TeacherReplyState copyWith({bool? isSending, bool? success, String? error}) =>
       TeacherReplyState(
         isSending: isSending ?? this.isSending,
         success: success ?? this.success,
@@ -96,8 +84,7 @@ class TeacherReplyState {
       );
 }
 
-class TeacherReplyNotifier
-    extends AutoDisposeNotifier<TeacherReplyState> {
+class TeacherReplyNotifier extends AutoDisposeNotifier<TeacherReplyState> {
   @override
   TeacherReplyState build() => const TeacherReplyState();
 
@@ -109,13 +96,13 @@ class TeacherReplyNotifier
     if (body.trim().isEmpty) return;
     state = const TeacherReplyState(isSending: true);
     try {
-      await ref.read(doubtServiceProvider).postReply(
+      await ref
+          .read(doubtServiceProvider)
+          .postTeacherReply(
             doubtId: doubtId,
-            authorId: teacherId,
+            teacherId: teacherId,
             body: body.trim(),
-            role: 'teacher',
           );
-      // Refresh the doubt header (isAnswered flag updated by service).
       ref.invalidate(teacherDoubtDetailProvider(doubtId));
       ref.invalidate(teacherAllDoubtsProvider);
       state = const TeacherReplyState(success: true);
@@ -129,25 +116,31 @@ class TeacherReplyNotifier
 
 final teacherReplyProvider =
     AutoDisposeNotifierProvider<TeacherReplyNotifier, TeacherReplyState>(
-        TeacherReplyNotifier.new);
-
-// ═════════════════════════════════════════════════════════════
-//  RESOLVE NOTIFIER
-// ═════════════════════════════════════════════════════════════
+      TeacherReplyNotifier.new,
+    );
 
 class ResolveNotifier extends AutoDisposeNotifier<AsyncValue<void>> {
   @override
   AsyncValue<void> build() => const AsyncValue.data(null);
 
-  Future<void> toggle(
-    String doubtId, {
-    required bool resolved,
-  }) async {
+  Future<void> toggle(String doubtId, {required bool resolved}) async {
+    final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (teacherId == null) {
+      state = AsyncValue.error(
+        StateError('Not authenticated'),
+        StackTrace.current,
+      );
+      return;
+    }
     state = const AsyncValue.loading();
     try {
       await ref
           .read(doubtServiceProvider)
-          .markResolved(doubtId, resolved: resolved);
+          .markResolvedForTeacher(
+            doubtId,
+            teacherId: teacherId,
+            resolved: resolved,
+          );
       ref.invalidate(teacherDoubtDetailProvider(doubtId));
       ref.invalidate(teacherAllDoubtsProvider);
       state = const AsyncValue.data(null);
@@ -159,4 +152,5 @@ class ResolveNotifier extends AutoDisposeNotifier<AsyncValue<void>> {
 
 final resolveDoubtProvider =
     AutoDisposeNotifierProvider<ResolveNotifier, AsyncValue<void>>(
-        ResolveNotifier.new);
+      ResolveNotifier.new,
+    );

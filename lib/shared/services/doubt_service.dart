@@ -2,11 +2,13 @@
 //  doubt_service.dart  –  Doubts + Replies API layer
 // ─────────────────────────────────────────────────────────────
 import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/constants/app_constants.dart';
 import '../models/models.dart';
 import 'supabase_service.dart';
-import '../../core/constants/app_constants.dart';
 
 final doubtServiceProvider = Provider<DoubtService>((ref) {
   return DoubtService(ref.watch(supabaseClientProvider));
@@ -16,18 +18,70 @@ class DoubtService {
   final SupabaseClient _client;
   DoubtService(this._client);
 
+  Future<List<String>> _fetchTeacherLectureIds(String teacherId) async {
+    final courses = await _client
+        .from('courses')
+        .select('id')
+        .eq('teacher_id', teacherId);
+    final courseIds = courses.map((row) => row['id'] as String).toList();
+    if (courseIds.isEmpty) return const [];
+
+    final subjects = await _client
+        .from('subjects')
+        .select('id')
+        .inFilter('course_id', courseIds);
+    final subjectIds = subjects.map((row) => row['id'] as String).toList();
+    if (subjectIds.isEmpty) return const [];
+
+    final chapters = await _client
+        .from('chapters')
+        .select('id')
+        .inFilter('subject_id', subjectIds);
+    final chapterIds = chapters.map((row) => row['id'] as String).toList();
+    if (chapterIds.isEmpty) return const [];
+
+    final lectures = await _client
+        .from('lectures')
+        .select('id')
+        .inFilter('chapter_id', chapterIds);
+    return lectures.map((row) => row['id'] as String).toList();
+  }
+
+  Future<void> _requireTeacherOwnsDoubt(
+    String doubtId,
+    String teacherId,
+  ) async {
+    final doubt = await _client
+        .from('doubts')
+        .select('lecture_id')
+        .eq('id', doubtId)
+        .maybeSingle();
+    if (doubt == null) {
+      throw StateError('Doubt not found.');
+    }
+
+    final lectureId = doubt['lecture_id'] as String?;
+    if (lectureId == null) {
+      throw StateError(
+        'This doubt is not linked to a lecture and cannot be managed from the teacher panel.',
+      );
+    }
+
+    final lectureIds = await _fetchTeacherLectureIds(teacherId);
+    if (!lectureIds.contains(lectureId)) {
+      throw StateError('You do not have permission to manage this doubt.');
+    }
+  }
+
   // ═══════════════════════════════════════════════════════
   //  DOUBTS
   // ═══════════════════════════════════════════════════════
 
-  /// Fetch doubts — optionally scoped by lectureId or studentId.
   Future<List<DoubtModel>> fetchDoubts({
     String? lectureId,
     String? studentId,
   }) async {
-    var query = _client
-        .from('doubts')
-        .select('*, users!student_id(name)');
+    var query = _client.from('doubts').select('*, users!student_id(name)');
 
     if (lectureId != null) {
       query = query.eq('lecture_id', lectureId) as dynamic;
@@ -36,13 +90,43 @@ class DoubtService {
       query = query.eq('student_id', studentId) as dynamic;
     }
 
-    final List<Map<String, dynamic>> data =
-        await (query as dynamic).order('created_at', ascending: false);
+    final List<Map<String, dynamic>> data = await (query as dynamic).order(
+      'created_at',
+      ascending: false,
+    );
 
-    // fetch reply counts in one batch
     final doubtIds = data.map((d) => d['id'] as String).toList();
-    final replyCounts =
-        doubtIds.isNotEmpty ? await _fetchReplyCounts(doubtIds) : <String, int>{};
+    final replyCounts = doubtIds.isNotEmpty
+        ? await _fetchReplyCounts(doubtIds)
+        : <String, int>{};
+
+    return data.map((d) {
+      final map = Map<String, dynamic>.from(d);
+      map['student_name'] = (map['users'] as Map?)?['name'];
+      map['reply_count'] = replyCounts[map['id']] ?? 0;
+      return DoubtModel.fromJson(map);
+    }).toList();
+  }
+
+  Future<List<DoubtModel>> fetchTeacherDoubts(String teacherId) async {
+    final lectureIds = await _fetchTeacherLectureIds(teacherId);
+    if (lectureIds.isEmpty) return const [];
+    return fetchDoubtsByLectureIds(lectureIds);
+  }
+
+  Future<List<DoubtModel>> fetchDoubtsByLectureIds(
+    List<String> lectureIds,
+  ) async {
+    final data = await _client
+        .from('doubts')
+        .select('*, users!student_id(name)')
+        .inFilter('lecture_id', lectureIds)
+        .order('created_at', ascending: false);
+
+    final doubtIds = data.map((d) => d['id'] as String).toList();
+    final replyCounts = doubtIds.isNotEmpty
+        ? await _fetchReplyCounts(doubtIds)
+        : <String, int>{};
 
     return data.map((d) {
       final map = Map<String, dynamic>.from(d);
@@ -65,6 +149,11 @@ class DoubtService {
     return DoubtModel.fromJson(map);
   }
 
+  Future<DoubtModel> fetchTeacherDoubt(String doubtId, String teacherId) async {
+    await _requireTeacherOwnsDoubt(doubtId, teacherId);
+    return fetchDoubt(doubtId);
+  }
+
   Future<Map<String, int>> _fetchReplyCounts(List<String> doubtIds) async {
     try {
       final rows = await _client
@@ -82,7 +171,6 @@ class DoubtService {
     }
   }
 
-  /// Post a new doubt with optional image.
   Future<DoubtModel> postDoubt({
     required String studentId,
     required String question,
@@ -117,35 +205,46 @@ class DoubtService {
     return DoubtModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// Mark a doubt as answered (legacy / teacher shortcut).
   Future<void> answerDoubt({
     required String doubtId,
     required String answer,
     required String teacherId,
   }) async {
-    await _client.from('doubts').update({
-      'answer': answer,
-      'answered_by': teacherId,
-      'is_answered': true,
-    }).eq('id', doubtId);
+    await _requireTeacherOwnsDoubt(doubtId, teacherId);
+    await _client
+        .from('doubts')
+        .update({
+          'answer': answer,
+          'answered_by': teacherId,
+          'is_answered': true,
+        })
+        .eq('id', doubtId);
   }
 
   Future<void> deleteDoubt(String doubtId) async {
     await _client.from('doubts').delete().eq('id', doubtId);
   }
 
-  /// Mark a doubt resolved/unresolved by the teacher.
   Future<void> markResolved(String doubtId, {required bool resolved}) async {
-    await _client.from('doubts').update({
-      'is_answered': resolved,
-    }).eq('id', doubtId);
+    await _client
+        .from('doubts')
+        .update({'is_answered': resolved})
+        .eq('id', doubtId);
+  }
+
+  Future<void> markResolvedForTeacher(
+    String doubtId, {
+    required String teacherId,
+    required bool resolved,
+  }) async {
+    await _requireTeacherOwnsDoubt(doubtId, teacherId);
+    await markResolved(doubtId, resolved: resolved);
   }
 
   // ═══════════════════════════════════════════════════════
   //  REPLIES
   // ═══════════════════════════════════════════════════════
 
-  /// Fetch all replies for a doubt, oldest-first.
   Future<List<DoubtReplyModel>> fetchReplies(String doubtId) async {
     final data = await _client
         .from('doubt_replies')
@@ -162,19 +261,22 @@ class DoubtService {
     }).toList();
   }
 
-  /// Realtime stream of replies for a doubt.
   Stream<List<DoubtReplyModel>> repliesStream(String doubtId) {
     return _client
         .from('doubt_replies')
         .stream(primaryKey: ['id'])
         .eq('doubt_id', doubtId)
-        .map((list) => list
-            .map((r) => DoubtReplyModel.fromJson(
-                Map<String, dynamic>.from(r as Map)))
-            .toList());
+        .map(
+          (list) => list
+              .map(
+                (r) => DoubtReplyModel.fromJson(
+                  Map<String, dynamic>.from(r as Map),
+                ),
+              )
+              .toList(),
+        );
   }
 
-  /// Post a reply with optional image.
   Future<DoubtReplyModel> postReply({
     required String doubtId,
     required String authorId,
@@ -207,34 +309,49 @@ class DoubtService {
         .select()
         .single();
 
-    // Teacher reply → mark doubt answered
     if (role == 'teacher') {
-      await _client.from('doubts').update({
-        'is_answered': true,
-        'answered_by': authorId,
-      }).eq('id', doubtId);
+      await _client
+          .from('doubts')
+          .update({'is_answered': true, 'answered_by': authorId})
+          .eq('id', doubtId);
     }
 
     final map = Map<String, dynamic>.from(data);
-    map['author_name'] = null; // populated by stream join
+    map['author_name'] = null;
     return DoubtReplyModel.fromJson(map);
+  }
+
+  Future<DoubtReplyModel> postTeacherReply({
+    required String doubtId,
+    required String teacherId,
+    required String body,
+    File? image,
+  }) async {
+    await _requireTeacherOwnsDoubt(doubtId, teacherId);
+    return postReply(
+      doubtId: doubtId,
+      authorId: teacherId,
+      body: body,
+      role: 'teacher',
+      image: image,
+    );
   }
 
   Future<void> deleteReply(String replyId) async {
     await _client.from('doubt_replies').delete().eq('id', replyId);
   }
 
-  // ═══════════════════════════════════════════════════════
-  //  LEGACY – Realtime doubts stream (lecture player)
-  // ═══════════════════════════════════════════════════════
   Stream<List<DoubtModel>> doubtsStream(String lectureId) {
     return _client
         .from('doubts')
         .stream(primaryKey: ['id'])
         .eq('lecture_id', lectureId)
-        .map((list) => list
-            .map((d) => DoubtModel.fromJson(
-                Map<String, dynamic>.from(d as Map)))
-            .toList());
+        .map(
+          (list) => list
+              .map(
+                (d) => DoubtModel.fromJson(Map<String, dynamic>.from(d as Map)),
+              )
+              .toList(),
+        );
   }
 }

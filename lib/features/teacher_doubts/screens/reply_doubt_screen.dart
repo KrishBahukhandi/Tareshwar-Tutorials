@@ -26,8 +26,7 @@ class ReplyDoubtScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ReplyDoubtScreen> createState() =>
-      _ReplyDoubtScreenState();
+  ConsumerState<ReplyDoubtScreen> createState() => _ReplyDoubtScreenState();
 }
 
 class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
@@ -54,14 +53,20 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
 
-    final teacherId =
-        ref.read(authServiceProvider).currentAuthUser?.id ?? '';
+    final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (teacherId == null || teacherId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You must be signed in to reply to doubts.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
-    await ref.read(teacherReplyProvider.notifier).postReply(
-          doubtId: widget.doubtId,
-          teacherId: teacherId,
-          body: text,
-        );
+    await ref
+        .read(teacherReplyProvider.notifier)
+        .postReply(doubtId: widget.doubtId, teacherId: teacherId, body: text);
   }
 
   @override
@@ -102,14 +107,14 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
             const Text(
               'Reply to Doubt',
               style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600),
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             Text(
               widget.studentName,
-              style: const TextStyle(
-                  color: Colors.white60, fontSize: 12),
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
           ],
@@ -127,7 +132,8 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
                 foregroundColor: Colors.white,
                 backgroundColor: AppColors.success.withAlpha(60),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: state.isSending ? null : _send,
               child: state.isSending
@@ -135,11 +141,17 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
-                  : const Text('Send',
+                  : const Text(
+                      'Send',
                       style: TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 13)),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -165,24 +177,26 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
 
             // ── Teacher identity banner ────────────────────
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.success.withAlpha(18),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: AppColors.success.withAlpha(60)),
+                border: Border.all(color: AppColors.success.withAlpha(60)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.verified_rounded,
-                      size: 15, color: AppColors.success),
+                  const Icon(
+                    Icons.verified_rounded,
+                    size: 15,
+                    color: AppColors.success,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Replying as Teacher',
-                    style: AppTextStyles.labelMedium
-                        .copyWith(color: AppColors.success),
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.success,
+                    ),
                   ),
                 ],
               ),
@@ -206,10 +220,10 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
                   textAlignVertical: TextAlignVertical.top,
                   style: AppTextStyles.bodyMedium,
                   decoration: InputDecoration(
-                    hintText:
-                        'Write a clear and helpful reply to the student…',
-                    hintStyle: AppTextStyles.bodyMedium
-                        .copyWith(color: AppColors.textHint),
+                    hintText: 'Write a clear and helpful reply to the student…',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textHint,
+                    ),
                     contentPadding: const EdgeInsets.all(16),
                     border: InputBorder.none,
                   ),
@@ -228,7 +242,8 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 0,
                 ),
                 onPressed: state.isSending ? null : _send,
@@ -237,7 +252,10 @@ class _ReplyDoubtScreenState extends ConsumerState<ReplyDoubtScreen> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: Colors.white))
+                          strokeWidth: 2.2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Icon(Icons.send_rounded, size: 18),
                 label: Text(
                   state.isSending ? 'Sending…' : 'Send Reply',
@@ -291,25 +309,32 @@ class _QuestionContextCard extends StatelessWidget {
                 backgroundColor: AppColors.primary.withAlpha(20),
                 child: Text(
                   studentName[0].toUpperCase(),
-                  style: AppTextStyles.labelSmall
-                      .copyWith(color: AppColors.primary),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
-              Text(studentName,
-                  style: AppTextStyles.labelMedium
-                      .copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                studentName,
+                style: AppTextStyles.labelMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.info.withAlpha(20),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text('Asked',
-                    style: AppTextStyles.labelSmall
-                        .copyWith(color: AppColors.info, fontSize: 9)),
+                child: Text(
+                  'Asked',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.info,
+                    fontSize: 9,
+                  ),
+                ),
               ),
             ],
           ),

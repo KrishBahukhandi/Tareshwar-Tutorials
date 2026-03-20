@@ -6,9 +6,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/app_router.dart';
 import '../../../shared/models/models.dart';
 import '../providers/teacher_test_providers.dart';
 
@@ -32,8 +34,7 @@ class AddQuestionScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<AddQuestionScreen> createState() =>
-      _AddQuestionScreenState();
+  ConsumerState<AddQuestionScreen> createState() => _AddQuestionScreenState();
 }
 
 class _AddQuestionScreenState extends ConsumerState<AddQuestionScreen> {
@@ -43,10 +44,12 @@ class _AddQuestionScreenState extends ConsumerState<AddQuestionScreen> {
 
     ref.listen(questionFormProvider, (_, next) {
       if (next.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(next.error!),
-          backgroundColor: AppColors.error,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
       if (next.success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -56,7 +59,14 @@ class _AddQuestionScreenState extends ConsumerState<AddQuestionScreen> {
           ),
         );
         ref.read(questionFormProvider.notifier).reset();
-        Navigator.of(context).pop(true);
+        context.go(
+          AppRoutes.testPreviewPath(widget.testId),
+          extra: {
+            'chapterId': widget.chapterId,
+            'chapterName': widget.chapterName,
+            'courseTitle': widget.courseTitle,
+          },
+        );
       }
     });
 
@@ -72,7 +82,9 @@ class _AddQuestionScreenState extends ConsumerState<AddQuestionScreen> {
               isLoading: state.isSubmitting,
               submitLabel: 'Add Question',
               onSubmit: (data) async {
-                await ref.read(questionFormProvider.notifier).create(
+                await ref
+                    .read(questionFormProvider.notifier)
+                    .create(
                       testId: widget.testId,
                       question: data.question,
                       options: data.options,
@@ -88,27 +100,31 @@ class _AddQuestionScreenState extends ConsumerState<AddQuestionScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, String title) =>
-      AppBar(
-        backgroundColor: const Color(0xFF1C1B2E),
-        foregroundColor: Colors.white,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600)),
-            Text(
-              '${widget.courseTitle} › ${widget.chapterName} › ${widget.testTitle}',
-              style: const TextStyle(
-                  color: Colors.white60, fontSize: 11),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    String title,
+  ) => AppBar(
+    backgroundColor: const Color(0xFF1C1B2E),
+    foregroundColor: Colors.white,
+    title: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      );
+        Text(
+          '${widget.courseTitle} › ${widget.chapterName} › ${widget.testTitle}',
+          style: const TextStyle(color: Colors.white60, fontSize: 11),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -129,8 +145,7 @@ class EditQuestionScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<EditQuestionScreen> createState() =>
-      _EditQuestionScreenState();
+  ConsumerState<EditQuestionScreen> createState() => _EditQuestionScreenState();
 }
 
 class _EditQuestionScreenState extends ConsumerState<EditQuestionScreen> {
@@ -140,10 +155,12 @@ class _EditQuestionScreenState extends ConsumerState<EditQuestionScreen> {
 
     ref.listen(questionFormProvider, (_, next) {
       if (next.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(next.error!),
-          backgroundColor: AppColors.error,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
       if (next.success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -170,7 +187,9 @@ class _EditQuestionScreenState extends ConsumerState<EditQuestionScreen> {
               isLoading: state.isSubmitting,
               submitLabel: 'Save Changes',
               onSubmit: (data) async {
-                await ref.read(questionFormProvider.notifier).update(
+                await ref
+                    .read(questionFormProvider.notifier)
+                    .update(
                       questionId: widget.question.id,
                       testId: widget.question.testId,
                       question: data.question,
@@ -187,27 +206,31 @@ class _EditQuestionScreenState extends ConsumerState<EditQuestionScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, String title) =>
-      AppBar(
-        backgroundColor: const Color(0xFF1C1B2E),
-        foregroundColor: Colors.white,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600)),
-            Text(
-              '${widget.courseTitle} › ${widget.chapterName} › ${widget.testTitle}',
-              style: const TextStyle(
-                  color: Colors.white60, fontSize: 11),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    String title,
+  ) => AppBar(
+    backgroundColor: const Color(0xFF1C1B2E),
+    foregroundColor: Colors.white,
+    title: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      );
+        Text(
+          '${widget.courseTitle} › ${widget.chapterName} › ${widget.testTitle}',
+          style: const TextStyle(color: Colors.white60, fontSize: 11),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -269,17 +292,15 @@ class _QuestionFormState extends State<_QuestionForm> {
   void initState() {
     super.initState();
     final q = widget.initial;
-    _questionCtrl =
-        TextEditingController(text: q?.question ?? '');
+    _questionCtrl = TextEditingController(text: q?.question ?? '');
     _optionCtrls = List.generate(
       4,
       (i) => TextEditingController(
-          text: (q != null && i < q.options.length) ? q.options[i] : ''),
+        text: (q != null && i < q.options.length) ? q.options[i] : '',
+      ),
     );
-    _marksCtrl = TextEditingController(
-        text: (q?.marks ?? 4).toString());
-    _explanationCtrl =
-        TextEditingController(text: q?.explanation ?? '');
+    _marksCtrl = TextEditingController(text: (q?.marks ?? 4).toString());
+    _explanationCtrl = TextEditingController(text: q?.explanation ?? '');
     _correctIndex = q?.correctOptionIndex ?? 0;
   }
 
@@ -296,10 +317,22 @@ class _QuestionFormState extends State<_QuestionForm> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final options = _optionCtrls.map((c) => c.text.trim()).toList();
+    final uniqueOptions = options.map((o) => o.toLowerCase()).toSet();
+    if (uniqueOptions.length != options.length) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Each answer option must be unique.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
     await widget.onSubmit(
       _QuestionData(
         question: _questionCtrl.text.trim(),
-        options: _optionCtrls.map((c) => c.text.trim()).toList(),
+        options: options,
         correctOptionIndex: _correctIndex,
         marks: int.tryParse(_marksCtrl.text.trim()) ?? 4,
         explanation: _explanationCtrl.text.trim().isEmpty
@@ -337,13 +370,14 @@ class _QuestionFormState extends State<_QuestionForm> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(
-                    color: AppColors.primary, width: 1.5),
+                  color: AppColors.primary,
+                  width: 1.5,
+                ),
               ),
             ),
-            validator: (v) =>
-                v == null || v.trim().isEmpty
-                    ? 'Question text is required'
-                    : null,
+            validator: (v) => v == null || v.trim().isEmpty
+                ? 'Question text is required'
+                : null,
           ),
 
           const SizedBox(height: 24),
@@ -351,13 +385,16 @@ class _QuestionFormState extends State<_QuestionForm> {
           // ── Options ────────────────────────────────────
           _SectionLabel('OPTIONS  •  Tap the circle to mark correct answer'),
           const SizedBox(height: 10),
-          ...List.generate(4, (i) => _OptionField(
-                label: _optionLabels[i],
-                color: _optionColors[i],
-                controller: _optionCtrls[i],
-                isSelected: _correctIndex == i,
-                onSelect: () => setState(() => _correctIndex = i),
-              )),
+          ...List.generate(
+            4,
+            (i) => _OptionField(
+              label: _optionLabels[i],
+              color: _optionColors[i],
+              controller: _optionCtrls[i],
+              isSelected: _correctIndex == i,
+              onSelect: () => setState(() => _correctIndex = i),
+            ),
+          ),
 
           const SizedBox(height: 24),
 
@@ -376,11 +413,10 @@ class _QuestionFormState extends State<_QuestionForm> {
                     TextFormField(
                       controller: _marksCtrl,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       style: AppTextStyles.bodyMedium.copyWith(
-                          fontWeight: FontWeight.w700),
+                        fontWeight: FontWeight.w700,
+                      ),
                       textAlign: TextAlign.center,
                       decoration: InputDecoration(
                         hintText: '4',
@@ -393,10 +429,15 @@ class _QuestionFormState extends State<_QuestionForm> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                              color: AppColors.warning, width: 1.5),
+                            color: AppColors.warning,
+                            width: 1.5,
+                          ),
                         ),
-                        prefixIcon: const Icon(Icons.star_rounded,
-                            size: 18, color: AppColors.warning),
+                        prefixIcon: const Icon(
+                          Icons.star_rounded,
+                          size: 18,
+                          color: AppColors.warning,
+                        ),
                       ),
                       validator: (v) {
                         final n = int.tryParse(v ?? '');
@@ -431,7 +472,9 @@ class _QuestionFormState extends State<_QuestionForm> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                              color: AppColors.info, width: 1.5),
+                            color: AppColors.info,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -454,7 +497,10 @@ class _QuestionFormState extends State<_QuestionForm> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2.2, color: Colors.white))
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.check_rounded, size: 20),
               label: Text(
                 widget.isLoading ? 'Saving…' : widget.submitLabel,
@@ -535,19 +581,19 @@ class _OptionField extends StatelessWidget {
                     ? AppColors.success.withAlpha(18)
                     : AppColors.surfaceVariant,
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: isSelected
-                      ? const BorderSide(
-                          color: AppColors.success, width: 1.5)
+                      ? const BorderSide(color: AppColors.success, width: 1.5)
                       : BorderSide.none,
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: isSelected
-                      ? const BorderSide(
-                          color: AppColors.success, width: 1.5)
+                      ? const BorderSide(color: AppColors.success, width: 1.5)
                       : BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
@@ -555,16 +601,18 @@ class _OptionField extends StatelessWidget {
                   borderSide: BorderSide(color: color, width: 1.5),
                 ),
               ),
-              validator: (v) =>
-                  v == null || v.trim().isEmpty
-                      ? 'Option $label required'
-                      : null,
+              validator: (v) => v == null || v.trim().isEmpty
+                  ? 'Option $label required'
+                  : null,
             ),
           ),
           if (isSelected) ...[
             const SizedBox(width: 8),
-            const Icon(Icons.check_circle_rounded,
-                color: AppColors.success, size: 20),
+            const Icon(
+              Icons.check_circle_rounded,
+              color: AppColors.success,
+              size: 20,
+            ),
           ],
         ],
       ),
@@ -577,16 +625,25 @@ class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
   @override
-  Widget build(BuildContext context) => Text(text,
-      style: AppTextStyles.headlineSmall.copyWith(
-          color: AppColors.primary, fontSize: 12, letterSpacing: 0.8));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: AppTextStyles.headlineSmall.copyWith(
+      color: AppColors.primary,
+      fontSize: 12,
+      letterSpacing: 0.8,
+    ),
+  );
 }
 
 class _FieldLabel extends StatelessWidget {
   final String text;
   const _FieldLabel(this.text);
   @override
-  Widget build(BuildContext context) => Text(text,
-      style: AppTextStyles.bodyMedium
-          .copyWith(fontWeight: FontWeight.w600, fontSize: 13));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: AppTextStyles.bodyMedium.copyWith(
+      fontWeight: FontWeight.w600,
+      fontSize: 13,
+    ),
+  );
 }

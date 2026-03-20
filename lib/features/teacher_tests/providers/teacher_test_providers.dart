@@ -1,39 +1,48 @@
 // ─────────────────────────────────────────────────────────────
 //  teacher_test_providers.dart
 //  Riverpod state for the Teacher Tests module.
-//  Covers: test list, question list, and form notifiers
-//  for create/edit test and create/edit/delete question.
 // ─────────────────────────────────────────────────────────────
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/models.dart';
+import '../../../shared/services/auth_service.dart';
 import '../data/teacher_test_repository.dart';
 
-// ═════════════════════════════════════════════════════════════
-//  READ PROVIDERS
-// ═════════════════════════════════════════════════════════════
-
-/// All tests for a given chapter.
 final teacherTestsProvider = FutureProvider.autoDispose
     .family<List<TestModel>, String>((ref, chapterId) async {
-  return ref.read(teacherTestRepoProvider).fetchTests(chapterId);
-});
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) return [];
+      return ref.read(teacherTestRepoProvider).fetchTests(chapterId, teacherId);
+    });
 
-/// All questions for a given test.
 final testQuestionsProvider = FutureProvider.autoDispose
     .family<List<QuestionModel>, String>((ref, testId) async {
-  return ref.read(teacherTestRepoProvider).fetchQuestions(testId);
-});
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) return [];
+      return ref
+          .read(teacherTestRepoProvider)
+          .fetchQuestions(testId, teacherId);
+    });
 
-/// Single test detail (used in preview / edit header).
 final teacherTestDetailProvider = FutureProvider.autoDispose
     .family<TestModel, String>((ref, testId) async {
-  return ref.read(teacherTestRepoProvider).fetchTest(testId);
-});
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) {
+        throw StateError('You must be signed in as a teacher.');
+      }
+      return ref.read(teacherTestRepoProvider).fetchTest(testId, teacherId);
+    });
 
-// ═════════════════════════════════════════════════════════════
-//  SHARED FORM STATE
-// ═════════════════════════════════════════════════════════════
+final teacherTestStatsProvider = FutureProvider.autoDispose
+    .family<TeacherTestStats, String>((ref, testId) async {
+      final teacherId = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) {
+        throw StateError('You must be signed in as a teacher.');
+      }
+      return ref
+          .read(teacherTestRepoProvider)
+          .fetchTestStats(testId, teacherId);
+    });
 
 class AsyncFormState {
   final bool isSubmitting;
@@ -46,21 +55,13 @@ class AsyncFormState {
     this.success = false,
   });
 
-  AsyncFormState copyWith({
-    bool? isSubmitting,
-    String? error,
-    bool? success,
-  }) =>
+  AsyncFormState copyWith({bool? isSubmitting, String? error, bool? success}) =>
       AsyncFormState(
         isSubmitting: isSubmitting ?? this.isSubmitting,
         error: error,
         success: success ?? this.success,
       );
 }
-
-// ═════════════════════════════════════════════════════════════
-//  TEST FORM NOTIFIER  (create)
-// ═════════════════════════════════════════════════════════════
 
 class TestFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
   @override
@@ -76,7 +77,12 @@ class TestFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
   }) async {
     state = const AsyncFormState(isSubmitting: true);
     try {
-      final test = await ref.read(teacherTestRepoProvider).createTest(
+      final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) throw StateError('Not authenticated');
+      final test = await ref
+          .read(teacherTestRepoProvider)
+          .createTest(
+            teacherId: teacherId,
             chapterId: chapterId,
             courseId: courseId,
             title: title,
@@ -99,11 +105,8 @@ class TestFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
 
 final testFormProvider =
     AutoDisposeNotifierProvider<TestFormNotifier, AsyncFormState>(
-        TestFormNotifier.new);
-
-// ═════════════════════════════════════════════════════════════
-//  TEST EDIT NOTIFIER  (update + publish toggle)
-// ═════════════════════════════════════════════════════════════
+      TestFormNotifier.new,
+    );
 
 class TestEditNotifier extends AutoDisposeNotifier<AsyncFormState> {
   @override
@@ -119,7 +122,12 @@ class TestEditNotifier extends AutoDisposeNotifier<AsyncFormState> {
   }) async {
     state = const AsyncFormState(isSubmitting: true);
     try {
-      await ref.read(teacherTestRepoProvider).updateTest(
+      final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) throw StateError('Not authenticated');
+      await ref
+          .read(teacherTestRepoProvider)
+          .updateTest(
+            teacherId: teacherId,
             testId: testId,
             title: title,
             durationMinutes: durationMinutes,
@@ -128,6 +136,7 @@ class TestEditNotifier extends AutoDisposeNotifier<AsyncFormState> {
           );
       ref.invalidate(teacherTestsProvider(chapterId));
       ref.invalidate(teacherTestDetailProvider(testId));
+      ref.invalidate(teacherTestStatsProvider(testId));
       state = const AsyncFormState(success: true);
     } catch (e) {
       state = AsyncFormState(error: e.toString());
@@ -140,11 +149,14 @@ class TestEditNotifier extends AutoDisposeNotifier<AsyncFormState> {
     required bool publish,
   }) async {
     try {
+      final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) throw StateError('Not authenticated');
       await ref
           .read(teacherTestRepoProvider)
-          .togglePublish(testId, publish: publish);
+          .togglePublish(testId, teacherId: teacherId, publish: publish);
       ref.invalidate(teacherTestsProvider(chapterId));
       ref.invalidate(teacherTestDetailProvider(testId));
+      ref.invalidate(teacherTestStatsProvider(testId));
     } catch (e) {
       state = AsyncFormState(error: e.toString());
     }
@@ -153,8 +165,14 @@ class TestEditNotifier extends AutoDisposeNotifier<AsyncFormState> {
   Future<void> delete(String testId, {required String chapterId}) async {
     state = const AsyncFormState(isSubmitting: true);
     try {
-      await ref.read(teacherTestRepoProvider).deleteTest(testId);
+      final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) throw StateError('Not authenticated');
+      await ref
+          .read(teacherTestRepoProvider)
+          .deleteTest(testId, teacherId: teacherId);
       ref.invalidate(teacherTestsProvider(chapterId));
+      ref.invalidate(teacherTestDetailProvider(testId));
+      ref.invalidate(teacherTestStatsProvider(testId));
       state = const AsyncFormState(success: true);
     } catch (e) {
       state = AsyncFormState(error: e.toString());
@@ -166,11 +184,8 @@ class TestEditNotifier extends AutoDisposeNotifier<AsyncFormState> {
 
 final testEditProvider =
     AutoDisposeNotifierProvider<TestEditNotifier, AsyncFormState>(
-        TestEditNotifier.new);
-
-// ═════════════════════════════════════════════════════════════
-//  QUESTION FORM NOTIFIER  (add + edit)
-// ═════════════════════════════════════════════════════════════
+      TestEditNotifier.new,
+    );
 
 class QuestionFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
   @override
@@ -186,7 +201,12 @@ class QuestionFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
   }) async {
     state = const AsyncFormState(isSubmitting: true);
     try {
-      await ref.read(teacherTestRepoProvider).createQuestion(
+      final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) throw StateError('Not authenticated');
+      await ref
+          .read(teacherTestRepoProvider)
+          .createQuestion(
+            teacherId: teacherId,
             testId: testId,
             question: question,
             options: options,
@@ -194,10 +214,12 @@ class QuestionFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
             marks: marks,
             explanation: explanation,
           );
-      // Sync total_marks so test header stays accurate.
-      await ref.read(teacherTestRepoProvider).syncTotalMarks(testId);
+      await ref
+          .read(teacherTestRepoProvider)
+          .syncTotalMarks(testId, teacherId: teacherId);
       ref.invalidate(testQuestionsProvider(testId));
       ref.invalidate(teacherTestDetailProvider(testId));
+      ref.invalidate(teacherTestStatsProvider(testId));
       state = const AsyncFormState(success: true);
     } catch (e) {
       state = AsyncFormState(error: e.toString());
@@ -215,17 +237,26 @@ class QuestionFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
   }) async {
     state = const AsyncFormState(isSubmitting: true);
     try {
-      await ref.read(teacherTestRepoProvider).updateQuestion(
+      final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) throw StateError('Not authenticated');
+      await ref
+          .read(teacherTestRepoProvider)
+          .updateQuestion(
+            teacherId: teacherId,
             questionId: questionId,
+            testId: testId,
             question: question,
             options: options,
             correctOptionIndex: correctOptionIndex,
             marks: marks,
             explanation: explanation,
           );
-      await ref.read(teacherTestRepoProvider).syncTotalMarks(testId);
+      await ref
+          .read(teacherTestRepoProvider)
+          .syncTotalMarks(testId, teacherId: teacherId);
       ref.invalidate(testQuestionsProvider(testId));
       ref.invalidate(teacherTestDetailProvider(testId));
+      ref.invalidate(teacherTestStatsProvider(testId));
       state = const AsyncFormState(success: true);
     } catch (e) {
       state = AsyncFormState(error: e.toString());
@@ -238,10 +269,17 @@ class QuestionFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
   }) async {
     state = const AsyncFormState(isSubmitting: true);
     try {
-      await ref.read(teacherTestRepoProvider).deleteQuestion(questionId);
-      await ref.read(teacherTestRepoProvider).syncTotalMarks(testId);
+      final teacherId = ref.read(authServiceProvider).currentAuthUser?.id;
+      if (teacherId == null) throw StateError('Not authenticated');
+      await ref
+          .read(teacherTestRepoProvider)
+          .deleteQuestion(questionId, teacherId: teacherId, testId: testId);
+      await ref
+          .read(teacherTestRepoProvider)
+          .syncTotalMarks(testId, teacherId: teacherId);
       ref.invalidate(testQuestionsProvider(testId));
       ref.invalidate(teacherTestDetailProvider(testId));
+      ref.invalidate(teacherTestStatsProvider(testId));
       state = const AsyncFormState(success: true);
     } catch (e) {
       state = AsyncFormState(error: e.toString());
@@ -253,4 +291,5 @@ class QuestionFormNotifier extends AutoDisposeNotifier<AsyncFormState> {
 
 final questionFormProvider =
     AutoDisposeNotifierProvider<QuestionFormNotifier, AsyncFormState>(
-        QuestionFormNotifier.new);
+      QuestionFormNotifier.new,
+    );

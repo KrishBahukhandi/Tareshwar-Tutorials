@@ -11,6 +11,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/models/models.dart';
 import '../../../shared/services/auth_service.dart';
 import '../../../shared/services/course_service.dart';
+import '../../teacher_courses/providers/teacher_course_providers.dart';
 import '../providers/teacher_dashboard_providers.dart';
 import '../widgets/teacher_course_tile.dart';
 
@@ -22,8 +23,7 @@ class TeacherCoursesScreen extends ConsumerStatefulWidget {
       _TeacherCoursesScreenState();
 }
 
-class _TeacherCoursesScreenState
-    extends ConsumerState<TeacherCoursesScreen> {
+class _TeacherCoursesScreenState extends ConsumerState<TeacherCoursesScreen> {
   String _filter = 'all'; // all | published | draft
 
   @override
@@ -45,8 +45,9 @@ class _TeacherCoursesScreenState
                   const SizedBox(height: 2),
                   Text(
                     'Manage and publish your course catalogue.',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -58,9 +59,12 @@ class _TeacherCoursesScreenState
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                 ),
               ),
             ],
@@ -77,12 +81,14 @@ class _TeacherCoursesScreenState
           // ── List ────────────────────────────────────────
           Expanded(
             child: coursesAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
-                child: Text('$e',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: AppColors.error)),
+                child: Text(
+                  '$e',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
               ),
               data: (courses) {
                 final filtered = _applyFilter(courses);
@@ -91,15 +97,15 @@ class _TeacherCoursesScreenState
                 }
                 return ListView.separated(
                   itemCount: filtered.length,
-                  separatorBuilder: (ctx, idx) =>
-                      const SizedBox(height: 12),
+                  separatorBuilder: (ctx, idx) => const SizedBox(height: 12),
                   itemBuilder: (_, i) => TeacherCourseTile(
                     course: filtered[i],
-                    onUpload: () => ref
-                        .read(teacherSelectedSectionProvider.notifier)
-                        .state = TeacherSection.uploadContent,
-                    onTogglePublish: () =>
-                        _togglePublish(filtered[i]),
+                    onUpload: () =>
+                        ref
+                                .read(teacherSelectedSectionProvider.notifier)
+                                .state =
+                            TeacherSection.uploadContent,
+                    onTogglePublish: () => _togglePublish(filtered[i]),
                   ),
                 );
               },
@@ -124,15 +130,15 @@ class _TeacherCoursesScreenState
   Future<void> _togglePublish(CourseModel course) async {
     try {
       await ref
-          .read(courseServiceProvider)
-          .togglePublish(course.id, !course.isPublished);
+          .read(courseFormProvider.notifier)
+          .togglePublish(course.id, publish: !course.isPublished);
       ref.invalidate(teacherCoursesListProvider);
       ref.invalidate(teacherDashboardStatsProvider);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -147,8 +153,7 @@ class _TeacherCoursesScreenState
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Create New Course'),
         content: SizedBox(
           width: 460,
@@ -163,18 +168,16 @@ class _TeacherCoursesScreenState
                     labelText: 'Course Title *',
                     prefixIcon: Icon(Icons.menu_book_rounded),
                   ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty
-                          ? 'Title is required'
-                          : null,
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Title is required'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: descCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Description',
-                    prefixIcon:
-                        Icon(Icons.description_outlined),
+                    prefixIcon: Icon(Icons.description_outlined),
                   ),
                   maxLines: 3,
                 ),
@@ -197,8 +200,7 @@ class _TeacherCoursesScreenState
                         controller: tagCtrl,
                         decoration: const InputDecoration(
                           labelText: 'Category Tag',
-                          prefixIcon:
-                              Icon(Icons.label_outline),
+                          prefixIcon: Icon(Icons.label_outline),
                         ),
                       ),
                     ),
@@ -226,8 +228,7 @@ class _TeacherCoursesScreenState
                     : null,
               );
             },
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('Create'),
           ),
         ],
@@ -242,10 +243,11 @@ class _TeacherCoursesScreenState
     String? categoryTag,
   }) async {
     try {
-      final uid =
-          ref.read(authServiceProvider).currentAuthUser?.id;
+      final uid = ref.read(authServiceProvider).currentAuthUser?.id;
       if (uid == null) return;
-      await ref.read(courseServiceProvider).createCourse(
+      await ref
+          .read(courseServiceProvider)
+          .createCourse(
             title: title,
             description: description,
             teacherId: uid,
@@ -264,9 +266,9 @@ class _TeacherCoursesScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -294,12 +296,9 @@ class _FilterBar extends StatelessWidget {
             label: Text(f.$2),
             selected: active,
             onSelected: (_) => onChanged(f.$1),
-            selectedColor:
-                AppColors.primary.withValues(alpha: 0.12),
+            selectedColor: AppColors.primary.withValues(alpha: 0.12),
             labelStyle: AppTextStyles.labelMedium.copyWith(
-              color: active
-                  ? AppColors.primary
-                  : AppColors.textSecondary,
+              color: active ? AppColors.primary : AppColors.textSecondary,
             ),
             showCheckmark: false,
             side: BorderSide(
@@ -320,21 +319,25 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.menu_book_outlined,
-                size: 64, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            Text(
-              filter == 'all'
-                  ? 'No courses yet.\nTap "New Course" to get started.'
-                  : 'No ${filter == "published" ? "published" : "draft"} courses.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
-            ),
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.menu_book_outlined,
+          size: 64,
+          color: AppColors.textHint,
         ),
-      );
+        const SizedBox(height: 12),
+        Text(
+          filter == 'all'
+              ? 'No courses yet.\nTap "New Course" to get started.'
+              : 'No ${filter == "published" ? "published" : "draft"} courses.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    ),
+  );
 }

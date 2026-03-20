@@ -11,6 +11,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
+import 'storage_access_service.dart';
 import 'supabase_service.dart';
 
 final courseServiceProvider = Provider<CourseService>((ref) {
@@ -21,15 +22,20 @@ class CourseService {
   final SupabaseClient _client;
   CourseService(this._client);
 
+  Future<LectureModel> _resolveLectureAssetUrls(LectureModel lecture) async {
+    final storage = StorageAccessService(_client);
+    final videoUrl = await storage.resolveAssetUrl(lecture.videoUrl);
+    final notesUrl = await storage.resolveAssetUrl(lecture.notesUrl);
+    return lecture.copyWith(videoUrl: videoUrl, notesUrl: notesUrl);
+  }
+
   // ═══════════════════════════════════════════════════════════
   //  COURSES — Read
   // ═══════════════════════════════════════════════════════════
 
   /// Fetch all (optionally only published) courses with teacher name.
   Future<List<CourseModel>> fetchCourses({bool publishedOnly = false}) async {
-    var q = _client
-        .from('courses')
-        .select('*, users!teacher_id(name)');
+    var q = _client.from('courses').select('*, users!teacher_id(name)');
 
     final List<Map<String, dynamic>> rows;
     if (publishedOnly) {
@@ -81,13 +87,14 @@ class CourseService {
     final rows = await _client
         .from('enrollments')
         .select(
-            'batch_id, batches!inner(course_id, courses!inner(*, users!teacher_id(name)))')
+          'batch_id, batches!inner(course_id, courses!inner(*, users!teacher_id(name)))',
+        )
         .eq('student_id', studentId);
 
     final seen = <String>{};
     final courses = <CourseModel>[];
     for (final r in rows) {
-      final batchMap  = r['batches'] as Map?;
+      final batchMap = r['batches'] as Map?;
       final courseMap = batchMap?['courses'] as Map?;
       if (courseMap == null) continue;
       final map = Map<String, dynamic>.from(courseMap);
@@ -182,8 +189,7 @@ class CourseService {
 
     final rows = await q.order('sort_order');
     return rows
-        .map((r) =>
-            SubjectModel.fromJson(Map<String, dynamic>.from(r as Map)))
+        .map((r) => SubjectModel.fromJson(Map<String, dynamic>.from(r as Map)))
         .toList();
   }
 
@@ -192,18 +198,17 @@ class CourseService {
     String courseId, {
     String? batchId,
   }) async {
-    var q = _client
-        .from('subjects')
-        .select()
-        .eq('course_id', courseId);
+    var q = _client.from('subjects').select().eq('course_id', courseId);
     if (batchId != null) q = q.eq('batch_id', batchId);
 
     final rows = await q.order('sort_order');
     return rows
-        .map((r) => SubjectModel.fromJson({
-              ...Map<String, dynamic>.from(r as Map),
-              'chapters': <dynamic>[],
-            }))
+        .map(
+          (r) => SubjectModel.fromJson({
+            ...Map<String, dynamic>.from(r as Map),
+            'chapters': <dynamic>[],
+          }),
+        )
         .toList();
   }
 
@@ -218,10 +223,12 @@ class CourseService {
         .eq('subject_id', subjectId)
         .order('sort_order');
     return rows
-        .map((r) => ChapterModel.fromJson({
-              ...Map<String, dynamic>.from(r as Map),
-              'lectures': <dynamic>[],
-            }))
+        .map(
+          (r) => ChapterModel.fromJson({
+            ...Map<String, dynamic>.from(r as Map),
+            'lectures': <dynamic>[],
+          }),
+        )
         .toList();
   }
 
@@ -264,17 +271,16 @@ class CourseService {
   // ═══════════════════════════════════════════════════════════
 
   /// All lectures for a chapter ordered by sort_order.
-  Future<List<LectureModel>> fetchLecturesByChapter(
-      String chapterId) async {
+  Future<List<LectureModel>> fetchLecturesByChapter(String chapterId) async {
     final rows = await _client
         .from('lectures')
         .select()
         .eq('chapter_id', chapterId)
         .order('sort_order');
-    return rows
-        .map((r) =>
-            LectureModel.fromJson(Map<String, dynamic>.from(r as Map)))
+    final lectures = rows
+        .map((r) => LectureModel.fromJson(Map<String, dynamic>.from(r as Map)))
         .toList();
+    return Future.wait(lectures.map(_resolveLectureAssetUrls));
   }
 
   /// Legacy: fetch lectures by course_id (flat, no hierarchy).
@@ -292,8 +298,7 @@ class CourseService {
         .inFilter('subject_id', subjectIds);
 
     if (chapters.isEmpty) return [];
-    final chapterIds =
-        chapters.map((c) => c['id'] as String).toList();
+    final chapterIds = chapters.map((c) => c['id'] as String).toList();
 
     final rows = await _client
         .from('lectures')
@@ -301,10 +306,10 @@ class CourseService {
         .inFilter('chapter_id', chapterIds)
         .order('sort_order');
 
-    return rows
-        .map((r) =>
-            LectureModel.fromJson(Map<String, dynamic>.from(r as Map)))
+    final lectures = rows
+        .map((r) => LectureModel.fromJson(Map<String, dynamic>.from(r as Map)))
         .toList();
+    return Future.wait(lectures.map(_resolveLectureAssetUrls));
   }
 
   /// Fetch a single lecture by ID.
@@ -314,7 +319,8 @@ class CourseService {
         .select()
         .eq('id', lectureId)
         .single();
-    return LectureModel.fromJson(Map<String, dynamic>.from(row));
+    final lecture = LectureModel.fromJson(Map<String, dynamic>.from(row));
+    return _resolveLectureAssetUrls(lecture);
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -413,7 +419,8 @@ class CourseService {
           .maybeSingle();
       if (row == null) return null;
       return LectureProgressModel.fromJson(
-          Map<String, dynamic>.from(row as Map));
+        Map<String, dynamic>.from(row as Map),
+      );
     } catch (_) {
       return null;
     }
@@ -430,7 +437,8 @@ class CourseService {
       return {
         for (final r in rows)
           (r['lecture_id'] as String): LectureProgressModel.fromJson(
-              Map<String, dynamic>.from(r as Map))
+            Map<String, dynamic>.from(r as Map),
+          ),
       };
     } catch (_) {
       return {};

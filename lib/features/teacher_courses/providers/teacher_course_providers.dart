@@ -8,76 +8,69 @@ import '../../../shared/models/models.dart';
 import '../../../shared/services/auth_service.dart';
 import '../data/teacher_course_repository.dart';
 
-// ═════════════════════════════════════════════════════════════
-//  MY COURSES  (auto-refresh family)
-// ═════════════════════════════════════════════════════════════
-
-/// Watches the current teacher's course list. Invalidate to refresh.
-final myCoursesProvider =
-    FutureProvider.autoDispose<List<CourseModel>>((ref) async {
+final myCoursesProvider = FutureProvider.autoDispose<List<CourseModel>>((
+  ref,
+) async {
   final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
   if (uid == null) return [];
   return ref.read(teacherCourseRepoProvider).fetchMyCourses(uid);
 });
 
-// ═════════════════════════════════════════════════════════════
-//  COURSE OUTLINE  (subjects → chapters → lectures)
-// ═════════════════════════════════════════════════════════════
-
 final courseOutlineProvider = FutureProvider.autoDispose
     .family<List<SubjectModel>, String>((ref, courseId) async {
-  return ref
-      .read(teacherCourseRepoProvider)
-      .fetchCourseOutline(courseId);
-});
-
-// ═════════════════════════════════════════════════════════════
-//  SUBJECTS for a course
-// ═════════════════════════════════════════════════════════════
+      final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (uid == null) return [];
+      return ref
+          .read(teacherCourseRepoProvider)
+          .fetchCourseOutline(courseId, teacherId: uid);
+    });
 
 final subjectsProvider = FutureProvider.autoDispose
     .family<List<SubjectModel>, String>((ref, courseId) async {
-  return ref
-      .read(teacherCourseRepoProvider)
-      .fetchSubjects(courseId);
-});
-
-// ═════════════════════════════════════════════════════════════
-//  CHAPTERS for a subject
-// ═════════════════════════════════════════════════════════════
+      final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (uid == null) return [];
+      return ref
+          .read(teacherCourseRepoProvider)
+          .fetchSubjects(courseId, teacherId: uid);
+    });
 
 final chaptersProvider = FutureProvider.autoDispose
     .family<List<ChapterModel>, String>((ref, subjectId) async {
-  return ref
-      .read(teacherCourseRepoProvider)
-      .fetchChapters(subjectId);
-});
-
-// ═════════════════════════════════════════════════════════════
-//  LECTURES for a chapter
-// ═════════════════════════════════════════════════════════════
+      final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (uid == null) return [];
+      return ref
+          .read(teacherCourseRepoProvider)
+          .fetchChapters(subjectId, teacherId: uid);
+    });
 
 final lecturesProvider = FutureProvider.autoDispose
     .family<List<LectureModel>, String>((ref, chapterId) async {
-  return ref
-      .read(teacherCourseRepoProvider)
-      .fetchLectures(chapterId);
-});
-
-// ═════════════════════════════════════════════════════════════
-//  ENROLLED STUDENTS for a course
-// ═════════════════════════════════════════════════════════════
+      final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (uid == null) return [];
+      return ref
+          .read(teacherCourseRepoProvider)
+          .fetchLectures(chapterId, teacherId: uid);
+    });
 
 final enrolledStudentsProvider = FutureProvider.autoDispose
     .family<List<EnrolledStudentInfo>, String>((ref, courseId) async {
-  return ref
-      .read(teacherCourseRepoProvider)
-      .fetchEnrolledStudents(courseId);
-});
+      final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (uid == null) return [];
+      return ref
+          .read(teacherCourseRepoProvider)
+          .fetchEnrolledStudents(courseId, teacherId: uid);
+    });
 
-// ═════════════════════════════════════════════════════════════
-//  COURSE FORM NOTIFIER  (create / edit)
-// ═════════════════════════════════════════════════════════════
+final teacherCourseStatsProvider = FutureProvider.autoDispose
+    .family<TeacherCourseStats, String>((ref, courseId) async {
+      final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
+      if (uid == null) {
+        throw StateError('Not authenticated');
+      }
+      return ref
+          .read(teacherCourseRepoProvider)
+          .fetchCourseStats(courseId, uid);
+    });
 
 class CourseFormState {
   final bool isSubmitting;
@@ -94,12 +87,11 @@ class CourseFormState {
     bool? isSubmitting,
     String? error,
     bool? success,
-  }) =>
-      CourseFormState(
-        isSubmitting: isSubmitting ?? this.isSubmitting,
-        error: error,
-        success: success ?? this.success,
-      );
+  }) => CourseFormState(
+    isSubmitting: isSubmitting ?? this.isSubmitting,
+    error: error,
+    success: success ?? this.success,
+  );
 }
 
 class CourseFormNotifier extends AutoDisposeNotifier<CourseFormState> {
@@ -120,7 +112,9 @@ class CourseFormNotifier extends AutoDisposeNotifier<CourseFormState> {
     }
     state = state.copyWith(isSubmitting: true, success: false);
     try {
-      await ref.read(teacherCourseRepoProvider).createCourse(
+      await ref
+          .read(teacherCourseRepoProvider)
+          .createCourse(
             teacherId: uid,
             title: title,
             description: description,
@@ -143,9 +137,17 @@ class CourseFormNotifier extends AutoDisposeNotifier<CourseFormState> {
     String? thumbnailUrl,
     String? categoryTag,
   }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
     state = state.copyWith(isSubmitting: true, success: false);
     try {
-      await ref.read(teacherCourseRepoProvider).updateCourse(
+      await ref
+          .read(teacherCourseRepoProvider)
+          .updateCourse(
+            teacherId: uid,
             courseId: courseId,
             title: title,
             description: description,
@@ -154,6 +156,7 @@ class CourseFormNotifier extends AutoDisposeNotifier<CourseFormState> {
             categoryTag: categoryTag,
           );
       ref.invalidate(myCoursesProvider);
+      ref.invalidate(teacherCourseStatsProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
@@ -161,23 +164,36 @@ class CourseFormNotifier extends AutoDisposeNotifier<CourseFormState> {
   }
 
   Future<void> delete(String courseId) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
     state = state.copyWith(isSubmitting: true, success: false);
     try {
-      await ref.read(teacherCourseRepoProvider).deleteCourse(courseId);
+      await ref
+          .read(teacherCourseRepoProvider)
+          .deleteCourse(courseId, teacherId: uid);
       ref.invalidate(myCoursesProvider);
+      ref.invalidate(teacherCourseStatsProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
     }
   }
 
-  Future<void> togglePublish(String courseId,
-      {required bool publish}) async {
+  Future<void> togglePublish(String courseId, {required bool publish}) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
     try {
       await ref
           .read(teacherCourseRepoProvider)
-          .togglePublish(courseId, publish: publish);
+          .togglePublish(courseId, teacherId: uid, publish: publish);
       ref.invalidate(myCoursesProvider);
+      ref.invalidate(teacherCourseStatsProvider(courseId));
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -186,76 +202,110 @@ class CourseFormNotifier extends AutoDisposeNotifier<CourseFormState> {
 
 final courseFormProvider =
     AutoDisposeNotifierProvider<CourseFormNotifier, CourseFormState>(
-        CourseFormNotifier.new);
-
-// ═════════════════════════════════════════════════════════════
-//  SUBJECT FORM NOTIFIER
-// ═════════════════════════════════════════════════════════════
+      CourseFormNotifier.new,
+    );
 
 class SubjectFormState {
   final bool isSubmitting;
   final String? error;
   final bool success;
-  const SubjectFormState(
-      {this.isSubmitting = false, this.error, this.success = false});
-  SubjectFormState copyWith(
-          {bool? isSubmitting, String? error, bool? success}) =>
-      SubjectFormState(
-        isSubmitting: isSubmitting ?? this.isSubmitting,
-        error: error,
-        success: success ?? this.success,
-      );
+
+  const SubjectFormState({
+    this.isSubmitting = false,
+    this.error,
+    this.success = false,
+  });
+
+  SubjectFormState copyWith({
+    bool? isSubmitting,
+    String? error,
+    bool? success,
+  }) => SubjectFormState(
+    isSubmitting: isSubmitting ?? this.isSubmitting,
+    error: error,
+    success: success ?? this.success,
+  );
 }
 
-class SubjectFormNotifier
-    extends AutoDisposeNotifier<SubjectFormState> {
+class SubjectFormNotifier extends AutoDisposeNotifier<SubjectFormState> {
   @override
   SubjectFormState build() => const SubjectFormState();
 
-  Future<void> create(
-      {required String courseId,
-      required String name,
-      required int sortOrder}) async {
+  Future<void> create({
+    required String courseId,
+    required String name,
+    required int sortOrder,
+  }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
     state = state.copyWith(isSubmitting: true);
     try {
       await ref
           .read(teacherCourseRepoProvider)
           .createSubject(
-              courseId: courseId, name: name, sortOrder: sortOrder);
+            teacherId: uid,
+            courseId: courseId,
+            name: name,
+            sortOrder: sortOrder,
+          );
       ref.invalidate(subjectsProvider(courseId));
       ref.invalidate(courseOutlineProvider(courseId));
+      ref.invalidate(teacherCourseStatsProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
     }
   }
 
-  Future<void> update(
-      {required String subjectId,
-      required String courseId,
-      required String name,
-      required int sortOrder}) async {
-    state = state.copyWith(isSubmitting: true);
-    try {
-      await ref.read(teacherCourseRepoProvider).updateSubject(
-          subjectId: subjectId, name: name, sortOrder: sortOrder);
-      ref.invalidate(subjectsProvider(courseId));
-      ref.invalidate(courseOutlineProvider(courseId));
-      state = state.copyWith(isSubmitting: false, success: true);
-    } catch (e) {
-      state = state.copyWith(isSubmitting: false, error: e.toString());
+  Future<void> update({
+    required String subjectId,
+    required String courseId,
+    required String name,
+    required int sortOrder,
+  }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
     }
-  }
-
-  Future<void> delete(
-      {required String subjectId, required String courseId}) async {
     state = state.copyWith(isSubmitting: true);
     try {
       await ref
           .read(teacherCourseRepoProvider)
-          .deleteSubject(subjectId);
+          .updateSubject(
+            teacherId: uid,
+            subjectId: subjectId,
+            name: name,
+            sortOrder: sortOrder,
+          );
       ref.invalidate(subjectsProvider(courseId));
       ref.invalidate(courseOutlineProvider(courseId));
+      state = state.copyWith(isSubmitting: false, success: true);
+    } catch (e) {
+      state = state.copyWith(isSubmitting: false, error: e.toString());
+    }
+  }
+
+  Future<void> delete({
+    required String subjectId,
+    required String courseId,
+  }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
+    state = state.copyWith(isSubmitting: true);
+    try {
+      await ref
+          .read(teacherCourseRepoProvider)
+          .deleteSubject(subjectId, teacherId: uid);
+      ref.invalidate(subjectsProvider(courseId));
+      ref.invalidate(courseOutlineProvider(courseId));
+      ref.invalidate(teacherCourseStatsProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
@@ -265,78 +315,113 @@ class SubjectFormNotifier
 
 final subjectFormProvider =
     AutoDisposeNotifierProvider<SubjectFormNotifier, SubjectFormState>(
-        SubjectFormNotifier.new);
-
-// ═════════════════════════════════════════════════════════════
-//  CHAPTER FORM NOTIFIER
-// ═════════════════════════════════════════════════════════════
+      SubjectFormNotifier.new,
+    );
 
 class ChapterFormState {
   final bool isSubmitting;
   final String? error;
   final bool success;
-  const ChapterFormState(
-      {this.isSubmitting = false, this.error, this.success = false});
-  ChapterFormState copyWith(
-          {bool? isSubmitting, String? error, bool? success}) =>
-      ChapterFormState(
-        isSubmitting: isSubmitting ?? this.isSubmitting,
-        error: error,
-        success: success ?? this.success,
-      );
+
+  const ChapterFormState({
+    this.isSubmitting = false,
+    this.error,
+    this.success = false,
+  });
+
+  ChapterFormState copyWith({
+    bool? isSubmitting,
+    String? error,
+    bool? success,
+  }) => ChapterFormState(
+    isSubmitting: isSubmitting ?? this.isSubmitting,
+    error: error,
+    success: success ?? this.success,
+  );
 }
 
-class ChapterFormNotifier
-    extends AutoDisposeNotifier<ChapterFormState> {
+class ChapterFormNotifier extends AutoDisposeNotifier<ChapterFormState> {
   @override
   ChapterFormState build() => const ChapterFormState();
 
-  Future<void> create(
-      {required String subjectId,
-      required String courseId,
-      required String name,
-      required int sortOrder}) async {
-    state = state.copyWith(isSubmitting: true);
-    try {
-      await ref.read(teacherCourseRepoProvider).createChapter(
-          subjectId: subjectId, name: name, sortOrder: sortOrder);
-      ref.invalidate(chaptersProvider(subjectId));
-      ref.invalidate(courseOutlineProvider(courseId));
-      state = state.copyWith(isSubmitting: false, success: true);
-    } catch (e) {
-      state = state.copyWith(isSubmitting: false, error: e.toString());
+  Future<void> create({
+    required String subjectId,
+    required String courseId,
+    required String name,
+    required int sortOrder,
+  }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
     }
-  }
-
-  Future<void> update(
-      {required String chapterId,
-      required String subjectId,
-      required String courseId,
-      required String name,
-      required int sortOrder}) async {
-    state = state.copyWith(isSubmitting: true);
-    try {
-      await ref.read(teacherCourseRepoProvider).updateChapter(
-          chapterId: chapterId, name: name, sortOrder: sortOrder);
-      ref.invalidate(chaptersProvider(subjectId));
-      ref.invalidate(courseOutlineProvider(courseId));
-      state = state.copyWith(isSubmitting: false, success: true);
-    } catch (e) {
-      state = state.copyWith(isSubmitting: false, error: e.toString());
-    }
-  }
-
-  Future<void> delete(
-      {required String chapterId,
-      required String subjectId,
-      required String courseId}) async {
     state = state.copyWith(isSubmitting: true);
     try {
       await ref
           .read(teacherCourseRepoProvider)
-          .deleteChapter(chapterId);
+          .createChapter(
+            teacherId: uid,
+            subjectId: subjectId,
+            name: name,
+            sortOrder: sortOrder,
+          );
       ref.invalidate(chaptersProvider(subjectId));
       ref.invalidate(courseOutlineProvider(courseId));
+      ref.invalidate(teacherCourseStatsProvider(courseId));
+      state = state.copyWith(isSubmitting: false, success: true);
+    } catch (e) {
+      state = state.copyWith(isSubmitting: false, error: e.toString());
+    }
+  }
+
+  Future<void> update({
+    required String chapterId,
+    required String subjectId,
+    required String courseId,
+    required String name,
+    required int sortOrder,
+  }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
+    state = state.copyWith(isSubmitting: true);
+    try {
+      await ref
+          .read(teacherCourseRepoProvider)
+          .updateChapter(
+            teacherId: uid,
+            chapterId: chapterId,
+            name: name,
+            sortOrder: sortOrder,
+          );
+      ref.invalidate(chaptersProvider(subjectId));
+      ref.invalidate(courseOutlineProvider(courseId));
+      state = state.copyWith(isSubmitting: false, success: true);
+    } catch (e) {
+      state = state.copyWith(isSubmitting: false, error: e.toString());
+    }
+  }
+
+  Future<void> delete({
+    required String chapterId,
+    required String subjectId,
+    required String courseId,
+  }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
+    state = state.copyWith(isSubmitting: true);
+    try {
+      await ref
+          .read(teacherCourseRepoProvider)
+          .deleteChapter(chapterId, teacherId: uid);
+      ref.invalidate(chaptersProvider(subjectId));
+      ref.invalidate(courseOutlineProvider(courseId));
+      ref.invalidate(teacherCourseStatsProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
@@ -346,29 +431,32 @@ class ChapterFormNotifier
 
 final chapterFormProvider =
     AutoDisposeNotifierProvider<ChapterFormNotifier, ChapterFormState>(
-        ChapterFormNotifier.new);
-
-// ═════════════════════════════════════════════════════════════
-//  LECTURE FORM NOTIFIER
-// ═════════════════════════════════════════════════════════════
+      ChapterFormNotifier.new,
+    );
 
 class LectureFormState {
   final bool isSubmitting;
   final String? error;
   final bool success;
-  const LectureFormState(
-      {this.isSubmitting = false, this.error, this.success = false});
-  LectureFormState copyWith(
-          {bool? isSubmitting, String? error, bool? success}) =>
-      LectureFormState(
-        isSubmitting: isSubmitting ?? this.isSubmitting,
-        error: error,
-        success: success ?? this.success,
-      );
+
+  const LectureFormState({
+    this.isSubmitting = false,
+    this.error,
+    this.success = false,
+  });
+
+  LectureFormState copyWith({
+    bool? isSubmitting,
+    String? error,
+    bool? success,
+  }) => LectureFormState(
+    isSubmitting: isSubmitting ?? this.isSubmitting,
+    error: error,
+    success: success ?? this.success,
+  );
 }
 
-class LectureFormNotifier
-    extends AutoDisposeNotifier<LectureFormState> {
+class LectureFormNotifier extends AutoDisposeNotifier<LectureFormState> {
   @override
   LectureFormState build() => const LectureFormState();
 
@@ -383,9 +471,17 @@ class LectureFormNotifier
     bool isFree = false,
     int sortOrder = 0,
   }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
     state = state.copyWith(isSubmitting: true);
     try {
-      await ref.read(teacherCourseRepoProvider).createLecture(
+      await ref
+          .read(teacherCourseRepoProvider)
+          .createLecture(
+            teacherId: uid,
             chapterId: chapterId,
             title: title,
             description: description,
@@ -397,6 +493,7 @@ class LectureFormNotifier
           );
       ref.invalidate(lecturesProvider(chapterId));
       ref.invalidate(courseOutlineProvider(courseId));
+      ref.invalidate(teacherCourseStatsProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
@@ -415,9 +512,17 @@ class LectureFormNotifier
     bool isFree = false,
     int sortOrder = 0,
   }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
     state = state.copyWith(isSubmitting: true);
     try {
-      await ref.read(teacherCourseRepoProvider).updateLecture(
+      await ref
+          .read(teacherCourseRepoProvider)
+          .updateLecture(
+            teacherId: uid,
             lectureId: lectureId,
             title: title,
             description: description,
@@ -440,13 +545,19 @@ class LectureFormNotifier
     required String chapterId,
     required String courseId,
   }) async {
+    final uid = ref.read(authServiceProvider).currentAuthUser?.id;
+    if (uid == null) {
+      state = state.copyWith(error: 'Not authenticated');
+      return;
+    }
     state = state.copyWith(isSubmitting: true);
     try {
       await ref
           .read(teacherCourseRepoProvider)
-          .deleteLecture(lectureId);
+          .deleteLecture(lectureId, teacherId: uid);
       ref.invalidate(lecturesProvider(chapterId));
       ref.invalidate(courseOutlineProvider(courseId));
+      ref.invalidate(teacherCourseStatsProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
@@ -456,4 +567,5 @@ class LectureFormNotifier
 
 final lectureFormProvider =
     AutoDisposeNotifierProvider<LectureFormNotifier, LectureFormState>(
-        LectureFormNotifier.new);
+      LectureFormNotifier.new,
+    );

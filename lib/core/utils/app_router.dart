@@ -46,6 +46,8 @@ import '../../features/teacher_analytics/screens/teacher_analytics_screen.dart';
 import '../../features/teacher_analytics/screens/course_analytics_screen.dart';
 import '../../features/teacher_analytics/screens/student_performance_screen.dart';
 import '../../features/teacher_auth/screens/teacher_login_screen.dart';
+import '../../features/teacher_auth/providers/teacher_auth_provider.dart'
+    show teacherAuthProvider, TeacherAuthStatus;
 import '../../features/teacher_dashboard/screens/teacher_dashboard_screen.dart'
     show TeacherDashboardShell;
 import '../../features/teacher_courses/screens/teacher_course_list_screen.dart';
@@ -95,65 +97,70 @@ class AppRoutes {
   AppRoutes._();
 
   // ── Auth ──────────────────────────────────────────────────
-  static const String splash        = '/';
-  static const String onboarding    = '/onboarding';
-  static const String login         = '/login';
-  static const String signup        = '/signup';
+  static const String splash = '/';
+  static const String onboarding = '/onboarding';
+  static const String login = '/login';
+  static const String signup = '/signup';
   static const String forgotPassword = '/forgot-password';
-  static const String otp           = '/otp';
+  static const String otp = '/otp';
 
   // ── Student shell root ────────────────────────────────────
   static const String studentDashboard = '/student';
 
   // ── Student tab roots ─────────────────────────────────────
-  static const String homeTab    = '/student/home';
-  static const String search     = '/student/search';
-  static const String myCourses  = '/student/my-courses';
+  static const String homeTab = '/student/home';
+  static const String search = '/student/search';
+  static const String myCourses = '/student/my-courses';
   static const String allCourses = '/student/courses';
-  static const String testsTab   = '/student/tests';
-  static const String profile    = '/student/profile';
+  static const String testsTab = '/student/tests';
+  static const String profile = '/student/profile';
 
   // ── Student sub-routes ────────────────────────────────────
-  static const String courseDetail   = '/student/course/:courseId';
-  static const String subjectDetail  = '/student/course/:courseId/subject/:subjectId';
-  static const String chapterDetail  = '/student/course/:courseId/subject/:subjectId/chapter/:chapterId';
-  static const String lectureList    = '/student/course/:courseId/lectures';
-  static const String lecturePlayer  = '/student/lecture/:lectureId';
-  static const String lectureNotes   = '/student/lecture/:lectureId/notes';
-  static const String testList            = '/student/test-list';
-  static const String testInstruction    = '/student/test-instruction/:testId';
-  static const String testAttempt        = '/student/test-attempt/:testId';
-  static const String test               = '/student/test/:testId';
-  static const String testResult         = '/student/test-result/:testId';
+  static const String courseDetail = '/student/course/:courseId';
+  static const String subjectDetail =
+      '/student/course/:courseId/subject/:subjectId';
+  static const String chapterDetail =
+      '/student/course/:courseId/subject/:subjectId/chapter/:chapterId';
+  static const String lectureList = '/student/course/:courseId/lectures';
+  static const String lecturePlayer = '/student/lecture/:lectureId';
+  static const String lectureNotes = '/student/lecture/:lectureId/notes';
+  static const String testList = '/student/test-list';
+  static const String testInstruction = '/student/test-instruction/:testId';
+  static const String testAttempt = '/student/test-attempt/:testId';
+  static const String test = '/student/test/:testId';
+  static const String testResult = '/student/test-result/:testId';
   static const String performanceAnalysis = '/student/performance-analysis';
-  static const String doubts             = '/student/doubts';
-  static const String doubtDetail        = '/student/doubt/:doubtId';
-  static const String askDoubt           = '/student/ask-doubt';
-  static const String notifications      = '/student/notifications';
+  static const String doubts = '/student/doubts';
+  static const String doubtDetail = '/student/doubt/:doubtId';
+  static const String askDoubt = '/student/ask-doubt';
+  static const String notifications = '/student/notifications';
 
   // ── Teacher ───────────────────────────────────────────────
-  static const String teacherLogin     = '/teacher/login';
+  static const String teacherLogin = '/teacher/login';
   static const String teacherDashboard = '/teacher';
-  static const String contentUpload    = '/teacher/upload/:courseId';
+  static const String contentUpload = '/teacher/upload/:courseId';
 
   // ── Teacher: Content Upload ───────────────────────────────
-  static const String createSubject   = '/teacher/courses/:courseId/subjects/create';
-  static const String createChapter   = '/teacher/subjects/:subjectId/chapters/create';
-  static const String uploadLecture   = '/teacher/chapters/:chapterId/lectures/upload';
+  static const String createSubject =
+      '/teacher/courses/:courseId/subjects/create';
+  static const String createChapter =
+      '/teacher/subjects/:subjectId/chapters/create';
+  static const String uploadLecture =
+      '/teacher/chapters/:chapterId/lectures/upload';
 
   // ── Teacher: Course Management ────────────────────────────
-  static const String teacherCourseList     = '/teacher/courses';
-  static const String teacherCreateCourse   = '/teacher/courses/create';
-  static const String teacherEditCourse     = '/teacher/courses/:courseId/edit';
-  static const String teacherCourseStudents = '/teacher/courses/:courseId/students';
+  static const String teacherCourseList = '/teacher/courses';
+  static const String teacherCreateCourse = '/teacher/courses/create';
+  static const String teacherEditCourse = '/teacher/courses/:courseId/edit';
+  static const String teacherCourseStudents =
+      '/teacher/courses/:courseId/students';
 
-  static String teacherEditCoursePath(String id) =>
-      '/teacher/courses/$id/edit';
+  static String teacherEditCoursePath(String id) => '/teacher/courses/$id/edit';
   static String teacherCourseStudentsPath(String id) =>
       '/teacher/courses/$id/students';
 
   // ── Teacher: Tests ────────────────────────────────────────
-  static const String createTest  = '/teacher/chapters/:chapterId/tests/create';
+  static const String createTest = '/teacher/chapters/:chapterId/tests/create';
   static const String addQuestion = '/teacher/tests/:testId/questions/add';
   static const String testPreview = '/teacher/tests/:testId/preview';
 
@@ -165,38 +172,42 @@ class AppRoutes {
       '/teacher/tests/$testId/preview';
 
   // ── Teacher: Doubts ───────────────────────────────────────
-  static const String teacherDoubtList   = '/teacher/doubts';
+  static const String teacherDoubtList = '/teacher/doubts';
   static const String teacherDoubtDetail = '/teacher/doubts/:doubtId';
-  static const String replyDoubt         = '/teacher/doubts/:doubtId/reply';
+  static const String replyDoubt = '/teacher/doubts/:doubtId/reply';
 
-  static String teacherDoubtListPath()              => '/teacher/doubts';
-  static String teacherDoubtDetailPath(String id)   => '/teacher/doubts/$id';
-  static String replyDoubtPath(String id)            => '/teacher/doubts/$id/reply';
+  static String teacherDoubtListPath() => '/teacher/doubts';
+  static String teacherDoubtDetailPath(String id) => '/teacher/doubts/$id';
+  static String replyDoubtPath(String id) => '/teacher/doubts/$id/reply';
 
   // ── Teacher: Analytics ────────────────────────────────────
-  static const String teacherAnalytics   = '/teacher/analytics';
-  static const String courseAnalytics    = '/teacher/analytics/course/:courseId';
-  static const String studentPerformance = '/teacher/analytics/student/:studentId';
+  static const String teacherAnalytics = '/teacher/analytics';
+  static const String courseAnalytics = '/teacher/analytics/course/:courseId';
+  static const String studentPerformance =
+      '/teacher/analytics/student/:studentId';
 
-  static String teacherAnalyticsPath()                => '/teacher/analytics';
-  static String courseAnalyticsPath(String id)        => '/teacher/analytics/course/$id';
-  static String studentPerformancePath(String id)     => '/teacher/analytics/student/$id';
+  static String teacherAnalyticsPath() => '/teacher/analytics';
+  static String courseAnalyticsPath(String id) =>
+      '/teacher/analytics/course/$id';
+  static String studentPerformancePath(String id) =>
+      '/teacher/analytics/student/$id';
 
   // ── Admin ─────────────────────────────────────────────────
-  static const String adminLogin            = '/admin/login';
-  static const String adminDashboard        = '/admin';
-  static const String adminStudents         = '/admin/students';
-  static const String adminTeachers         = '/admin/teachers';
-  static const String adminCourses          = '/admin/courses';
-  static const String batchManagement       = '/admin/batches';
-  static const String adminBatchEnrollments = '/admin/batches/:batchId/enrollments';
-  static const String adminPayments         = '/admin/payments';
-  static const String adminTransactions     = '/admin/payments/transactions';
+  static const String adminLogin = '/admin/login';
+  static const String adminDashboard = '/admin';
+  static const String adminStudents = '/admin/students';
+  static const String adminTeachers = '/admin/teachers';
+  static const String adminCourses = '/admin/courses';
+  static const String batchManagement = '/admin/batches';
+  static const String adminBatchEnrollments =
+      '/admin/batches/:batchId/enrollments';
+  static const String adminPayments = '/admin/payments';
+  static const String adminTransactions = '/admin/payments/transactions';
   static const String adminRevenueAnalytics = '/admin/payments/analytics';
-  static const String adminAnnouncements       = '/admin/announcements';
-  static const String adminCreateAnnouncement  = '/admin/announcements/create';
-  static const String adminAnalytics           = '/admin/analytics';
-  static const String adminSettings         = '/admin/settings';
+  static const String adminAnnouncements = '/admin/announcements';
+  static const String adminCreateAnnouncement = '/admin/announcements/create';
+  static const String adminAnalytics = '/admin/analytics';
+  static const String adminSettings = '/admin/settings';
 
   // ── Admin: User detail pages ──────────────────────────────
   static const String adminUserStudentDetail = '/admin/students/:userId';
@@ -210,7 +221,7 @@ class AppRoutes {
   // ── Admin: Course management ──────────────────────────────
   static const String adminCourseDetail = '/admin/courses/:courseId';
   static const String adminCreateCourse = '/admin/courses/create';
-  static const String adminEditCourse   = '/admin/courses/:courseId/edit';
+  static const String adminEditCourse = '/admin/courses/:courseId/edit';
 
   static String adminCourseDetailPath(String courseId) =>
       '/admin/courses/$courseId';
@@ -218,10 +229,10 @@ class AppRoutes {
       '/admin/courses/$courseId/edit';
 
   // ── Admin: Batch management (new modular screens) ─────────
-  static const String adminCreateBatch     = '/admin/batches/create';
-  static const String adminBatchDetail     = '/admin/batches/:batchId';
-  static const String adminEditBatch       = '/admin/batches/:batchId/edit';
-  static const String adminBatchStudents   = '/admin/batches/:batchId/students';
+  static const String adminCreateBatch = '/admin/batches/create';
+  static const String adminBatchDetail = '/admin/batches/:batchId';
+  static const String adminEditBatch = '/admin/batches/:batchId/edit';
+  static const String adminBatchStudents = '/admin/batches/:batchId/students';
 
   static String adminCreateBatchPath({String? courseId}) =>
       '/admin/batches/create${courseId != null ? '?courseId=${Uri.encodeComponent(courseId)}' : ''}';
@@ -234,45 +245,48 @@ class AppRoutes {
 
   static String adminBatchEnrollmentsPath(String batchId) =>
       '/admin/batches/$batchId/enrollments';
-  static String adminPaymentsPath()         => '/admin/payments';
-  static String adminTransactionsPath()     => '/admin/payments/transactions';
+  static String adminPaymentsPath() => '/admin/payments';
+  static String adminTransactionsPath() => '/admin/payments/transactions';
   static String adminRevenueAnalyticsPath() => '/admin/payments/analytics';
-  static String adminAnnouncementsPath()       => '/admin/announcements';
-  static String adminCreateAnnouncementPath()  => '/admin/announcements/create';
-  static String adminLoginPath()               => '/admin/login';
+  static String adminAnnouncementsPath() => '/admin/announcements';
+  static String adminCreateAnnouncementPath() => '/admin/announcements/create';
+  static String adminLoginPath() => '/admin/login';
 
   // ── Downloads ─────────────────────────────────────────────
-  static const String downloads          = '/student/downloads';
-  static const String downloadedPlayer   = '/student/downloads/:lectureId/play';
+  static const String downloads = '/student/downloads';
+  static const String downloadedPlayer = '/student/downloads/:lectureId/play';
 
-  static String downloadsPath()                   => '/student/downloads';
-  static String downloadedPlayerPath(String id)   => '/student/downloads/$id/play';
+  static String downloadsPath() => '/student/downloads';
+  static String downloadedPlayerPath(String id) =>
+      '/student/downloads/$id/play';
 
   // ── Student batches ───────────────────────────────────────
   static const String studentBatches = '/student/my-batches';
   static String studentBatchesPath() => '/student/my-batches';
 
   // ── Live Classes ──────────────────────────────────────────
-  static const String liveClasses       = '/student/live-classes';
-  static const String liveClassDetail   = '/student/live-classes/:liveClassId';
+  static const String liveClasses = '/student/live-classes';
+  static const String liveClassDetail = '/student/live-classes/:liveClassId';
 
-  static String liveClassesPath()           => '/student/live-classes';
-  static String liveClassDetailPath(String id) =>
-      '/student/live-classes/$id';
+  static String liveClassesPath() => '/student/live-classes';
+  static String liveClassDetailPath(String id) => '/student/live-classes/$id';
 
   // ── Teacher batches ───────────────────────────────────────
   static const String teacherBatches = '/teacher/batches';
   static String teacherBatchesPath() => '/teacher/batches';
 
   // ── Path helpers ──────────────────────────────────────────
-  static String courseDetailPath(String id)    => '/student/course/$id';
+  static String courseDetailPath(String id) => '/student/course/$id';
   static String subjectDetailPath(String courseId, String subjectId) =>
       '/student/course/$courseId/subject/$subjectId';
-  static String chapterDetailPath(String courseId, String subjectId,
-          String chapterId) =>
-      '/student/course/$courseId/subject/$subjectId/chapter/$chapterId';
-  static String lectureListPath(String courseId)  => '/student/course/$courseId/lectures';
-  static String lecturePlayerPath(String id)       => '/student/lecture/$id';
+  static String chapterDetailPath(
+    String courseId,
+    String subjectId,
+    String chapterId,
+  ) => '/student/course/$courseId/subject/$subjectId/chapter/$chapterId';
+  static String lectureListPath(String courseId) =>
+      '/student/course/$courseId/lectures';
+  static String lecturePlayerPath(String id) => '/student/lecture/$id';
   static String lectureNotesPath(
     String lectureId, {
     required String notesUrl,
@@ -281,18 +295,20 @@ class AppRoutes {
       '/student/lecture/$lectureId/notes'
       '?url=${Uri.encodeComponent(notesUrl)}'
       '&title=${Uri.encodeComponent(title)}';
-  static String testListPath()                     => '/student/test-list';
-  static String testInstructionPath(String id)     => '/student/test-instruction/$id';
-  static String testAttemptPath(String id)         => '/student/test-attempt/$id';
-  static String testPath(String id)                => '/student/test/$id';
-  static String testResultPath(String id)          => '/student/test-result/$id';
-  static String performanceAnalysisPath()          => '/student/performance-analysis';
-  static String doubtsPath()                       => '/student/doubts';
-  static String doubtDetailPath(String id)         => '/student/doubt/$id';
-  static String askDoubtPath({String? lectureId})  =>
+  static String testListPath() => '/student/test-list';
+  static String testInstructionPath(String id) =>
+      '/student/test-instruction/$id';
+  static String testAttemptPath(String id) => '/student/test-attempt/$id';
+  static String testPath(String id) => '/student/test/$id';
+  static String testResultPath(String id) => '/student/test-result/$id';
+  static String performanceAnalysisPath() => '/student/performance-analysis';
+  static String doubtsPath() => '/student/doubts';
+  static String doubtDetailPath(String id) => '/student/doubt/$id';
+  static String askDoubtPath({String? lectureId}) =>
       '/student/ask-doubt${lectureId != null ? '?lectureId=${Uri.encodeComponent(lectureId)}' : ''}';
-  static String teacherLoginPath()                 => '/teacher/login';
-  static String contentUploadPath(String courseId) => '/teacher/upload/$courseId';
+  static String teacherLoginPath() => '/teacher/login';
+  static String contentUploadPath(String courseId) =>
+      '/teacher/upload/$courseId';
   static String createSubjectPath(String courseId) =>
       '/teacher/courses/$courseId/subjects/create';
   static String createChapterPath(String subjectId) =>
@@ -305,8 +321,9 @@ class AppRoutes {
 //  Router provider
 // ─────────────────────────────────────────────────────────────
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authService  = ref.watch(authServiceProvider);
-  final adminAuth    = ref.watch(adminAuthProvider);
+  final authService = ref.watch(authServiceProvider);
+  final adminAuth = ref.watch(adminAuthProvider);
+  final teacherAuth = ref.watch(teacherAuthProvider);
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
@@ -315,8 +332,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     // ── Global redirect ───────────────────────────────────
     redirect: (context, state) {
       final isLoggedIn = authService.isLoggedIn;
-      final role       = authService.currentRole;
-      final loc        = state.matchedLocation;
+      final role = authService.currentRole;
+      final loc = state.matchedLocation;
 
       final isAuthRoute = const [
         AppRoutes.login,
@@ -328,16 +345,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ].contains(loc);
 
       final isTeacherAuthRoute = loc == AppRoutes.teacherLogin;
-      final isAdminLoginRoute  = loc == AppRoutes.adminLogin;
-      final isTeacherArea      = loc.startsWith('/teacher');
+      final isAdminLoginRoute = loc == AppRoutes.adminLogin;
+      final isTeacherArea = loc.startsWith('/teacher');
       // Admin-area excludes the login page itself
-      final isAdminArea        =
-          loc.startsWith('/admin') && !isAdminLoginRoute;
+      final isAdminArea = loc.startsWith('/admin') && !isAdminLoginRoute;
 
       // ── Admin-area guard ───────────────────────────────
       // Unauthenticated → admin login page
-      if (isAdminArea &&
-          adminAuth.status != AdminAuthStatus.authenticated) {
+      if (isAdminArea && adminAuth.status != AdminAuthStatus.authenticated) {
         return AppRoutes.adminLogin;
       }
       // Already authenticated admin hitting login → skip to dashboard
@@ -347,25 +362,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // ── Teacher-area guard ─────────────────────────────
-      if (isTeacherArea && !isTeacherAuthRoute && !isLoggedIn) {
-        return AppRoutes.teacherLogin;
-      }
-      if (isTeacherArea && !isTeacherAuthRoute && isLoggedIn &&
-          role != AppConstants.roleTeacher) {
-        return AppRoutes.teacherLogin;
-      }
-      if (isTeacherAuthRoute && isLoggedIn &&
-          role == AppConstants.roleTeacher) {
-        return AppRoutes.teacherDashboard;
+      if (isTeacherArea) {
+        if (teacherAuth.status == TeacherAuthStatus.initial ||
+            teacherAuth.status == TeacherAuthStatus.loading) {
+          return null;
+        }
+
+        if (!isTeacherAuthRoute &&
+            teacherAuth.status != TeacherAuthStatus.authenticated) {
+          return AppRoutes.teacherLogin;
+        }
+
+        if (isTeacherAuthRoute &&
+            teacherAuth.status == TeacherAuthStatus.authenticated) {
+          return AppRoutes.teacherDashboard;
+        }
       }
 
       // ── Student / general routes ───────────────────────
-      if (!isLoggedIn && !isAuthRoute && !isTeacherArea &&
-          !isAdminArea && !isAdminLoginRoute) {
+      if (!isLoggedIn &&
+          !isAuthRoute &&
+          !isTeacherArea &&
+          !isAdminArea &&
+          !isAdminLoginRoute) {
         return AppRoutes.login;
       }
-      if (isLoggedIn && isAuthRoute &&
-          loc == AppRoutes.login) {
+      if (isLoggedIn && isAuthRoute && loc == AppRoutes.login) {
         if (role == AppConstants.roleTeacher) {
           return AppRoutes.teacherDashboard;
         }
@@ -467,9 +489,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Student full-screen routes ─────────────────────────
       GoRoute(
         path: AppRoutes.courseDetail,
-        builder: (context, state) => CourseDetailScreen(
-          courseId: state.pathParameters['courseId']!,
-        ),
+        builder: (context, state) =>
+            CourseDetailScreen(courseId: state.pathParameters['courseId']!),
       ),
       GoRoute(
         path: AppRoutes.subjectDetail,
@@ -500,24 +521,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.lecturePlayer,
-        builder: (context, state) => LecturePlayerScreen(
-          lectureId: state.pathParameters['lectureId']!,
-        ),
+        builder: (context, state) =>
+            LecturePlayerScreen(lectureId: state.pathParameters['lectureId']!),
       ),
       GoRoute(
         path: AppRoutes.lectureNotes,
         builder: (context, state) => LectureNotesScreen(
-          notesUrl: Uri.decodeComponent(
-              state.uri.queryParameters['url'] ?? ''),
+          notesUrl: Uri.decodeComponent(state.uri.queryParameters['url'] ?? ''),
           lectureTitle: Uri.decodeComponent(
-              state.uri.queryParameters['title'] ?? 'Lecture Notes'),
+            state.uri.queryParameters['title'] ?? 'Lecture Notes',
+          ),
         ),
       ),
       GoRoute(
         path: AppRoutes.test,
-        builder: (context, state) => TestScreen(
-          testId: state.pathParameters['testId']!,
-        ),
+        builder: (context, state) =>
+            TestScreen(testId: state.pathParameters['testId']!),
       ),
       GoRoute(
         path: AppRoutes.testList,
@@ -525,21 +544,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.testInstruction,
-        builder: (context, state) => TestInstructionScreen(
-          testId: state.pathParameters['testId']!,
-        ),
+        builder: (context, state) =>
+            TestInstructionScreen(testId: state.pathParameters['testId']!),
       ),
       GoRoute(
         path: AppRoutes.testAttempt,
-        builder: (context, state) => TestAttemptScreen(
-          testId: state.pathParameters['testId']!,
-        ),
+        builder: (context, state) =>
+            TestAttemptScreen(testId: state.pathParameters['testId']!),
       ),
       GoRoute(
         path: AppRoutes.testResult,
-        builder: (context, state) => TestResultScreen(
-          testId: state.pathParameters['testId']!,
-        ),
+        builder: (context, state) =>
+            TestResultScreen(testId: state.pathParameters['testId']!),
       ),
       GoRoute(
         path: AppRoutes.performanceAnalysis,
@@ -551,15 +567,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.doubtDetail,
-        builder: (context, state) => DoubtDetailScreen(
-          doubtId: state.pathParameters['doubtId']!,
-        ),
+        builder: (context, state) =>
+            DoubtDetailScreen(doubtId: state.pathParameters['doubtId']!),
       ),
       GoRoute(
         path: AppRoutes.askDoubt,
-        builder: (context, state) => AskDoubtScreen(
-          lectureId: state.uri.queryParameters['lectureId'],
-        ),
+        builder: (context, state) =>
+            AskDoubtScreen(lectureId: state.uri.queryParameters['lectureId']),
       ),
       GoRoute(
         path: AppRoutes.notifications,
@@ -600,7 +614,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final course = state.extra as CourseModel?;
           if (course == null) {
             return const Scaffold(
-                body: Center(child: Text('Course not found')));
+              body: Center(child: Text('Course not found')),
+            );
           }
           return EditCourseScreen(course: course);
         },
@@ -694,9 +709,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.teacherDoubtDetail,
-        builder: (context, state) => TeacherDoubtDetailScreen(
-          doubtId: state.pathParameters['doubtId']!,
-        ),
+        builder: (context, state) =>
+            TeacherDoubtDetailScreen(doubtId: state.pathParameters['doubtId']!),
       ),
       GoRoute(
         path: AppRoutes.replyDoubt,
@@ -789,15 +803,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.adminCreateBatch,
         builder: (context, state) => CreateBatchScreen(
-          preselectedCourseId:
-              state.uri.queryParameters['courseId'],
+          preselectedCourseId: state.uri.queryParameters['courseId'],
         ),
       ),
       GoRoute(
         path: AppRoutes.adminBatchDetail,
-        builder: (context, state) => BatchDetailScreen(
-          batchId: state.pathParameters['batchId']!,
-        ),
+        builder: (context, state) =>
+            BatchDetailScreen(batchId: state.pathParameters['batchId']!),
       ),
       GoRoute(
         path: AppRoutes.adminEditBatch,
@@ -808,9 +820,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.adminBatchStudents,
-        builder: (context, state) => BatchStudentsScreen(
-          batchId: state.pathParameters['batchId']!,
-        ),
+        builder: (context, state) =>
+            BatchStudentsScreen(batchId: state.pathParameters['batchId']!),
       ),
       GoRoute(
         path: AppRoutes.adminPayments,
@@ -821,9 +832,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Admin: Payment management (full-page screens) ──────
       GoRoute(
         path: AppRoutes.adminTransactions,
-        builder: (context, state) => TransactionsScreen(
-          initialTab: state.extra as String?,
-        ),
+        builder: (context, state) =>
+            TransactionsScreen(initialTab: state.extra as String?),
       ),
       GoRoute(
         path: AppRoutes.adminRevenueAnalytics,
@@ -852,15 +862,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Admin: User detail pages ───────────────────────────
       GoRoute(
         path: AppRoutes.adminUserStudentDetail,
-        builder: (context, state) => StudentDetailScreen(
-          userId: state.pathParameters['userId']!,
-        ),
+        builder: (context, state) =>
+            StudentDetailScreen(userId: state.pathParameters['userId']!),
       ),
       GoRoute(
         path: AppRoutes.adminUserTeacherDetail,
-        builder: (context, state) => TeacherDetailScreen(
-          userId: state.pathParameters['userId']!,
-        ),
+        builder: (context, state) =>
+            TeacherDetailScreen(userId: state.pathParameters['userId']!),
       ),
 
       // ── Student: My Batches ────────────────────────────────
@@ -897,10 +905,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
 
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-          child: Text('Page not found: ${state.error}')),
-    ),
+    errorBuilder: (context, state) =>
+        Scaffold(body: Center(child: Text('Page not found: ${state.error}'))),
   );
 });
 

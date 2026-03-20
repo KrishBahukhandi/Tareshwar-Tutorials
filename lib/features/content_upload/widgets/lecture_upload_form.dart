@@ -110,21 +110,51 @@ class _LectureUploadFormState extends State<LectureUploadForm> {
     if (!_formKey.currentState!.validate()) return;
 
     final dur = int.tryParse(_durationCtrl.text.trim());
-    final order = int.tryParse(_orderCtrl.text.trim()) ?? 0;
+    final order = int.tryParse(_orderCtrl.text.trim()) ?? 1;
 
-    await widget.onSubmit(LectureUploadData(
-      title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim().isEmpty
-          ? null
-          : _descCtrl.text.trim(),
-      videoBytes: _videoFile?.bytes,
-      videoFileName: _videoFile?.name,
-      pdfBytes: _pdfFile?.bytes,
-      pdfFileName: _pdfFile?.name,
-      durationSeconds: dur,
-      isFree: _isFree,
-      sortOrder: order,
-    ));
+    if (_videoFile == null && _pdfFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add at least a video or PDF before uploading.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+    if (dur != null && dur < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Duration cannot be negative.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+    if (order < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Display order must be at least 1.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    await widget.onSubmit(
+      LectureUploadData(
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim().isEmpty
+            ? null
+            : _descCtrl.text.trim(),
+        videoBytes: _videoFile?.bytes,
+        videoFileName: _videoFile?.name,
+        pdfBytes: _pdfFile?.bytes,
+        pdfFileName: _pdfFile?.name,
+        durationSeconds: dur,
+        isFree: _isFree,
+        sortOrder: order,
+      ),
+    );
   }
 
   // ── Helpers ───────────────────────────────────────────────
@@ -223,9 +253,17 @@ class _LectureUploadFormState extends State<LectureUploadForm> {
                     TextFormField(
                       controller: _durationCtrl,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return null;
+                        }
+                        final duration = int.tryParse(value.trim());
+                        if (duration == null || duration < 0) {
+                          return 'Enter a valid duration';
+                        }
+                        return null;
+                      },
                       style: AppTextStyles.bodyMedium,
                       decoration: const InputDecoration(hintText: '0'),
                     ),
@@ -242,9 +280,14 @@ class _LectureUploadFormState extends State<LectureUploadForm> {
                     TextFormField(
                       controller: _orderCtrl,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        final order = int.tryParse(value?.trim() ?? '');
+                        if (order == null || order < 1) {
+                          return 'Enter 1 or more';
+                        }
+                        return null;
+                      },
                       style: AppTextStyles.bodyMedium,
                       decoration: const InputDecoration(hintText: '1'),
                     ),
@@ -281,7 +324,9 @@ class _LectureUploadFormState extends State<LectureUploadForm> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2.2, color: Colors.white),
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Icon(Icons.cloud_upload_rounded, size: 20),
               label: Text(
@@ -306,10 +351,12 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        text,
-        style: AppTextStyles.bodyMedium
-            .copyWith(fontWeight: FontWeight.w600, fontSize: 13),
-      );
+    text,
+    style: AppTextStyles.bodyMedium.copyWith(
+      fontWeight: FontWeight.w600,
+      fontSize: 13,
+    ),
+  );
 }
 
 class _FilePicker extends StatelessWidget {
@@ -337,9 +384,7 @@ class _FilePicker extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: hasFile
-              ? color.withAlpha(20)
-              : AppColors.surfaceVariant,
+          color: hasFile ? color.withAlpha(20) : AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: hasFile ? color.withAlpha(100) : AppColors.border,
@@ -348,9 +393,11 @@ class _FilePicker extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon,
-                size: 22,
-                color: hasFile ? color : AppColors.textSecondary),
+            Icon(
+              icon,
+              size: 22,
+              color: hasFile ? color : AppColors.textSecondary,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -370,8 +417,11 @@ class _FilePicker extends StatelessWidget {
                 onPressed: onRemove,
               )
             else
-              Icon(Icons.attach_file_rounded,
-                  size: 18, color: AppColors.textHint),
+              Icon(
+                Icons.attach_file_rounded,
+                size: 18,
+                color: AppColors.textHint,
+              ),
           ],
         ),
       ),
@@ -395,14 +445,10 @@ class _FreeToggle extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.lock_open_rounded,
-              size: 20, color: AppColors.success),
+          Icon(Icons.lock_open_rounded, size: 20, color: AppColors.success),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              'Free Preview',
-              style: AppTextStyles.bodyMedium,
-            ),
+            child: Text('Free Preview', style: AppTextStyles.bodyMedium),
           ),
           Switch.adaptive(
             value: value,
@@ -429,12 +475,16 @@ class _UploadProgressBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Uploading…',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.primary)),
-            Text('$pct%',
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: AppColors.primary)),
+            Text(
+              'Uploading…',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+            ),
+            Text(
+              '$pct%',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primary,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 6),

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 //  teacher_test_repository.dart
 //  Supabase CRUD for teacher-side MCQ Test management.
-//  Tables: tests, questions
+//  Tables: tests, questions, test_attempts
 // ─────────────────────────────────────────────────────────────
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,16 +13,94 @@ final teacherTestRepoProvider = Provider<TeacherTestRepository>((ref) {
   return TeacherTestRepository(ref.watch(supabaseClientProvider));
 });
 
+class TeacherTestStats {
+  final int questionCount;
+  final int attemptCount;
+
+  const TeacherTestStats({
+    required this.questionCount,
+    required this.attemptCount,
+  });
+
+  bool get hasAttempts => attemptCount > 0;
+}
+
 class TeacherTestRepository {
   final SupabaseClient _db;
+
   TeacherTestRepository(this._db);
+
+  Future<void> _requireTeacherOwnsChapter(
+    String chapterId,
+    String teacherId,
+  ) async {
+    final chapter = await _db
+        .from('chapters')
+        .select('subject_id')
+        .eq('id', chapterId)
+        .maybeSingle();
+    if (chapter == null) {
+      throw StateError('Chapter not found.');
+    }
+
+    final subject = await _db
+        .from('subjects')
+        .select('course_id')
+        .eq('id', chapter['subject_id'] as String)
+        .maybeSingle();
+    if (subject == null) {
+      throw StateError('Subject not found for this chapter.');
+    }
+
+    final course = await _db
+        .from('courses')
+        .select('teacher_id')
+        .eq('id', subject['course_id'] as String)
+        .maybeSingle();
+    if (course == null || course['teacher_id'] != teacherId) {
+      throw StateError(
+        'You do not have permission to manage tests for this chapter.',
+      );
+    }
+  }
+
+  Future<String> _requireTeacherOwnsTest(
+    String testId,
+    String teacherId,
+  ) async {
+    final test = await _db
+        .from('tests')
+        .select('chapter_id')
+        .eq('id', testId)
+        .maybeSingle();
+    if (test == null) {
+      throw StateError('Test not found.');
+    }
+
+    final chapterId = test['chapter_id'] as String;
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
+    return chapterId;
+  }
+
+  Future<void> _ensureTestIsEditable(String testId, String teacherId) async {
+    await _requireTeacherOwnsTest(testId, teacherId);
+    final attempts = await _db
+        .from('test_attempts')
+        .select('id')
+        .eq('test_id', testId);
+    if (attempts.isNotEmpty) {
+      throw StateError(
+        'This test already has student attempts, so editing is locked.',
+      );
+    }
+  }
 
   // ════════════════════════════════════════════════════════
   //  TESTS
   // ════════════════════════════════════════════════════════
 
-  /// Fetch all tests belonging to a chapter.
-  Future<List<TestModel>> fetchTests(String chapterId) async {
+  Future<List<TestModel>> fetchTests(String chapterId, String teacherId) async {
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
     final data = await _db
         .from('tests')
         .select()
@@ -33,18 +111,33 @@ class TeacherTestRepository {
         .toList();
   }
 
-  /// Fetch a single test by ID.
-  Future<TestModel> fetchTest(String testId) async {
-    final data = await _db
-        .from('tests')
-        .select()
-        .eq('id', testId)
-        .single();
+  Future<TestModel> fetchTest(String testId, String teacherId) async {
+    await _requireTeacherOwnsTest(testId, teacherId);
+    final data = await _db.from('tests').select().eq('id', testId).single();
     return TestModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// Create a new test. Returns the persisted row.
+  Future<TeacherTestStats> fetchTestStats(
+    String testId,
+    String teacherId,
+  ) async {
+    await _requireTeacherOwnsTest(testId, teacherId);
+    final questions = await _db
+        .from('questions')
+        .select('id')
+        .eq('test_id', testId);
+    final attempts = await _db
+        .from('test_attempts')
+        .select('id')
+        .eq('test_id', testId);
+    return TeacherTestStats(
+      questionCount: questions.length,
+      attemptCount: attempts.length,
+    );
+  }
+
   Future<TestModel> createTest({
+    required String teacherId,
     required String chapterId,
     String? courseId,
     required String title,
@@ -53,11 +146,11 @@ class TeacherTestRepository {
     double negativeMarks = 0.25,
     bool isPublished = false,
   }) async {
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
     final data = await _db
         .from('tests')
         .insert({
           'chapter_id': chapterId,
-          'course_id': courseId,
           'title': title,
           'duration_minutes': durationMinutes,
           'total_marks': totalMarks,
@@ -69,14 +162,15 @@ class TeacherTestRepository {
     return TestModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// Update test metadata.
   Future<TestModel> updateTest({
+    required String teacherId,
     required String testId,
     required String title,
     required int durationMinutes,
     required int totalMarks,
     double negativeMarks = 0.25,
   }) async {
+    await _requireTeacherOwnsTest(testId, teacherId);
     final data = await _db
         .from('tests')
         .update({
@@ -91,17 +185,17 @@ class TeacherTestRepository {
     return TestModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// Toggle publish state.
-  Future<void> togglePublish(String testId, {required bool publish}) async {
-    await _db
-        .from('tests')
-        .update({'is_published': publish})
-        .eq('id', testId);
+  Future<void> togglePublish(
+    String testId, {
+    required String teacherId,
+    required bool publish,
+  }) async {
+    await _ensureTestIsEditable(testId, teacherId);
+    await _db.from('tests').update({'is_published': publish}).eq('id', testId);
   }
 
-  /// Delete a test and all its questions (cascade handled by DB or done here).
-  Future<void> deleteTest(String testId) async {
-    // Questions have ON DELETE CASCADE in Supabase schema so one call suffices.
+  Future<void> deleteTest(String testId, {required String teacherId}) async {
+    await _ensureTestIsEditable(testId, teacherId);
     await _db.from('tests').delete().eq('id', testId);
   }
 
@@ -109,8 +203,11 @@ class TeacherTestRepository {
   //  QUESTIONS
   // ════════════════════════════════════════════════════════
 
-  /// Fetch all questions for a test, ordered by insertion.
-  Future<List<QuestionModel>> fetchQuestions(String testId) async {
+  Future<List<QuestionModel>> fetchQuestions(
+    String testId,
+    String teacherId,
+  ) async {
+    await _requireTeacherOwnsTest(testId, teacherId);
     final data = await _db
         .from('questions')
         .select()
@@ -121,8 +218,8 @@ class TeacherTestRepository {
         .toList();
   }
 
-  /// Add a new MCQ question to a test.
   Future<QuestionModel> createQuestion({
+    required String teacherId,
     required String testId,
     required String question,
     required List<String> options,
@@ -131,6 +228,7 @@ class TeacherTestRepository {
     String? explanation,
   }) async {
     assert(options.length == 4, 'Exactly 4 options required');
+    await _ensureTestIsEditable(testId, teacherId);
     final data = await _db
         .from('questions')
         .insert({
@@ -146,9 +244,10 @@ class TeacherTestRepository {
     return QuestionModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// Update an existing question.
   Future<QuestionModel> updateQuestion({
+    required String teacherId,
     required String questionId,
+    required String testId,
     required String question,
     required List<String> options,
     required int correctOptionIndex,
@@ -156,6 +255,7 @@ class TeacherTestRepository {
     String? explanation,
   }) async {
     assert(options.length == 4, 'Exactly 4 options required');
+    await _ensureTestIsEditable(testId, teacherId);
     final data = await _db
         .from('questions')
         .update({
@@ -171,18 +271,21 @@ class TeacherTestRepository {
     return QuestionModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// Delete a single question.
-  Future<void> deleteQuestion(String questionId) async {
+  Future<void> deleteQuestion(
+    String questionId, {
+    required String teacherId,
+    required String testId,
+  }) async {
+    await _ensureTestIsEditable(testId, teacherId);
     await _db.from('questions').delete().eq('id', questionId);
   }
 
-  /// Recalculate and patch total_marks on the test based on its questions.
-  Future<void> syncTotalMarks(String testId) async {
-    final questions = await fetchQuestions(testId);
+  Future<void> syncTotalMarks(
+    String testId, {
+    required String teacherId,
+  }) async {
+    final questions = await fetchQuestions(testId, teacherId);
     final total = questions.fold<int>(0, (sum, q) => sum + q.marks);
-    await _db
-        .from('tests')
-        .update({'total_marks': total})
-        .eq('id', testId);
+    await _db.from('tests').update({'total_marks': total}).eq('id', testId);
   }
 }

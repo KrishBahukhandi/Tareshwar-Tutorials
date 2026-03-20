@@ -29,13 +29,13 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 //  AuthStatus  –  all possible states
 // ─────────────────────────────────────────────────────────────
 enum AuthStatus {
-  initial,         // cold start – session check pending
-  authenticated,   // valid session + user loaded
+  initial, // cold start – session check pending
+  authenticated, // valid session + user loaded
   unauthenticated, // no session / signed out
-  loading,         // async operation in progress
-  otpSent,         // phone OTP dispatched; waiting for code input
-  emailSent,       // password-reset email dispatched
-  error,           // last operation failed; errorMessage is set
+  loading, // async operation in progress
+  otpSent, // phone OTP dispatched; waiting for code input
+  emailSent, // password-reset email dispatched
+  error, // last operation failed; errorMessage is set
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -57,12 +57,12 @@ class AuthState {
   });
 
   // ── Convenience booleans ──────────────────────────────────
-  bool get isLoading      => status == AuthStatus.loading;
+  bool get isLoading => status == AuthStatus.loading;
   bool get isAuthenticated => status == AuthStatus.authenticated;
-  bool get hasError       => status == AuthStatus.error;
-  bool get otpSent        => status == AuthStatus.otpSent;
-  bool get emailSent      => status == AuthStatus.emailSent;
-  bool get isInitial      => status == AuthStatus.initial;
+  bool get hasError => status == AuthStatus.error;
+  bool get otpSent => status == AuthStatus.otpSent;
+  bool get emailSent => status == AuthStatus.emailSent;
+  bool get isInitial => status == AuthStatus.initial;
 
   AuthState copyWith({
     AuthStatus? status,
@@ -71,14 +71,13 @@ class AuthState {
     String? pendingPhone,
     bool clearError = false,
     bool clearPhone = false,
-    bool clearUser  = false,
-  }) =>
-      AuthState(
-        status:       status       ?? this.status,
-        user:         clearUser    ? null : (user ?? this.user),
-        errorMessage: clearError   ? null : (errorMessage ?? this.errorMessage),
-        pendingPhone: clearPhone   ? null : (pendingPhone  ?? this.pendingPhone),
-      );
+    bool clearUser = false,
+  }) => AuthState(
+    status: status ?? this.status,
+    user: clearUser ? null : (user ?? this.user),
+    errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+    pendingPhone: clearPhone ? null : (pendingPhone ?? this.pendingPhone),
+  );
 
   @override
   String toString() =>
@@ -167,10 +166,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
       await _repo.sendPhoneOtp(phone);
-      state = state.copyWith(
-        status: AuthStatus.otpSent,
-        pendingPhone: phone,
-      );
+      state = state.copyWith(status: AuthStatus.otpSent, pendingPhone: phone);
     } on AuthException catch (e) {
       state = state.copyWith(
         status: AuthStatus.error,
@@ -237,11 +233,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   // ── Utility actions ───────────────────────────────────────
-  void clearError() =>
-      state = state.copyWith(clearError: true,
-          status: state.status == AuthStatus.error
-              ? AuthStatus.unauthenticated
-              : state.status);
+  void clearError() => state = state.copyWith(
+    clearError: true,
+    status: state.status == AuthStatus.error
+        ? AuthStatus.unauthenticated
+        : state.status,
+  );
 
   /// Put back into otpSent to let the user re-enter the code.
   void resetToOtpSent() =>
@@ -286,7 +283,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   String _mapGenericError(Object e) {
     final msg = e.toString().toLowerCase();
-    if (msg.contains('network') || msg.contains('socket') ||
+    if (msg.contains('disabled') || msg.contains('inactive')) {
+      return 'Your account has been disabled. Please contact the institute administrator.';
+    }
+    if (msg.contains('network') ||
+        msg.contains('socket') ||
         msg.contains('connection')) {
       return 'No internet connection. Please check your network.';
     }
@@ -302,8 +303,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 // ─────────────────────────────────────────────────────────────
 
 /// Primary auth state provider – watch this in every auth screen.
-final authProvider =
-    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(ref.watch(authRepositoryProvider));
 });
 

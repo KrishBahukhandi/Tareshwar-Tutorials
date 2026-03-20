@@ -7,38 +7,51 @@ import '../../domain/entities/auth_user_entity.dart';
 
 class AuthRemoteDataSource {
   final SupabaseClient _client;
+  AuthUserEntity? _currentProfile;
 
   AuthRemoteDataSource(this._client);
 
   // ── Helpers ───────────────────────────────────────────────
   Future<AuthUserEntity> _profileFromId(String userId) async {
-    final data = await _client
-        .from('users')
-        .select()
-        .eq('id', userId)
-        .single();
+    final data = await _client.from('users').select().eq('id', userId).single();
     return _entityFromJson(data);
   }
 
   AuthUserEntity _entityFromJson(Map<String, dynamic> j) => AuthUserEntity(
-        id: j['id'] as String,
-        name: j['name'] as String? ?? 'Student',
-        email: j['email'] as String? ?? '',
-        phone: j['phone'] as String?,
-        role: j['role'] as String? ?? 'student',
-        avatarUrl: j['avatar_url'] as String?,
-        createdAt: j['created_at'] != null
-            ? DateTime.parse(j['created_at'] as String)
-            : DateTime.now(),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String? ?? 'Student',
+    email: j['email'] as String? ?? '',
+    phone: j['phone'] as String?,
+    role: j['role'] as String? ?? 'student',
+    avatarUrl: j['avatar_url'] as String?,
+    isActive: j['is_active'] as bool? ?? true,
+    createdAt: j['created_at'] != null
+        ? DateTime.parse(j['created_at'] as String)
+        : DateTime.now(),
+  );
+
+  Future<AuthUserEntity> _loadAndValidateProfile(String userId) async {
+    final profile = await _profileFromId(userId);
+    _currentProfile = profile;
+
+    if (!profile.isActive) {
+      await _client.auth.signOut();
+      throw const InactiveAccountException();
+    }
+
+    return profile;
+  }
 
   // ── Auth state stream ─────────────────────────────────────
   Stream<AuthUserEntity?> get authStateStream async* {
     yield* _client.auth.onAuthStateChange.asyncMap((event) async {
       final user = event.session?.user;
-      if (user == null) return null;
+      if (user == null) {
+        _currentProfile = null;
+        return null;
+      }
       try {
-        return await _profileFromId(user.id);
+        return await _loadAndValidateProfile(user.id);
       } catch (_) {
         return null;
       }
@@ -47,6 +60,7 @@ class AuthRemoteDataSource {
 
   bool get isLoggedIn => _client.auth.currentSession != null;
   String? get currentRole =>
+      _currentProfile?.role ??
       _client.auth.currentUser?.userMetadata?['role'] as String?;
 
   // ── Email sign-in ─────────────────────────────────────────
@@ -59,7 +73,7 @@ class AuthRemoteDataSource {
       password: password,
     );
     if (res.user == null) throw Exception('Login failed');
-    return _profileFromId(res.user!.id);
+    return _loadAndValidateProfile(res.user!.id);
   }
 
   // ── Sign up ───────────────────────────────────────────────
@@ -83,7 +97,7 @@ class AuthRemoteDataSource {
       'role': 'student',
     });
 
-    return _profileFromId(res.user!.id);
+    return _loadAndValidateProfile(res.user!.id);
   }
 
   // ── Reset password ────────────────────────────────────────
@@ -116,20 +130,35 @@ class AuthRemoteDataSource {
       'email': res.user!.email ?? '',
     });
 
-    return _profileFromId(res.user!.id);
+    return _loadAndValidateProfile(res.user!.id);
   }
 
   // ── Sign out ──────────────────────────────────────────────
-  Future<void> signOut() async => _client.auth.signOut();
+  Future<void> signOut() async {
+    _currentProfile = null;
+    await _client.auth.signOut();
+  }
 
   // ── Fetch current user ────────────────────────────────────
   Future<AuthUserEntity?> fetchCurrentUser() async {
     final supa.User? user = _client.auth.currentUser;
     if (user == null) return null;
     try {
-      return await _profileFromId(user.id);
+      return await _loadAndValidateProfile(user.id);
     } catch (_) {
       return null;
     }
   }
+}
+
+class InactiveAccountException implements Exception {
+  final String message;
+
+  const InactiveAccountException([
+    this.message =
+        'Your account has been disabled. Please contact the institute administrator.',
+  ]);
+
+  @override
+  String toString() => message;
 }

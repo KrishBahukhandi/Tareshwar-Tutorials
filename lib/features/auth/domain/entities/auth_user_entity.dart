@@ -9,6 +9,7 @@ class AuthUserEntity {
   final String? phone;
   final String role;
   final String? avatarUrl;
+  final bool isActive;
   final DateTime createdAt;
 
   const AuthUserEntity({
@@ -18,12 +19,13 @@ class AuthUserEntity {
     this.phone,
     required this.role,
     this.avatarUrl,
+    this.isActive = true,
     required this.createdAt,
   });
 
   bool get isStudent => role == 'student';
   bool get isTeacher => role == 'teacher';
-  bool get isAdmin   => role == 'admin';
+  bool get isAdmin => role == 'admin';
 
   String get displayName => name.isNotEmpty ? name : (email.split('@').first);
 
@@ -39,18 +41,19 @@ class AuthUserEntity {
     String? name,
     String? avatarUrl,
     String? phone,
-  }) =>
-      AuthUserEntity(
-        id: id,
-        name: name ?? this.name,
-        email: email,
-        phone: phone ?? this.phone,
-        role: role,
-        avatarUrl: avatarUrl ?? this.avatarUrl,
-        createdAt: createdAt,
-      );
+    bool? isActive,
+  }) => AuthUserEntity(
+    id: id,
+    name: name ?? this.name,
+    email: email,
+    phone: phone ?? this.phone,
+    role: role,
+    avatarUrl: avatarUrl ?? this.avatarUrl,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt,
+  );
 
   @override
   String toString() =>
-      'AuthUserEntity(id: $id, email: $email, role: $role)';
+      'AuthUserEntity(id: $id, email: $email, role: $role, isActive: $isActive)';
 }

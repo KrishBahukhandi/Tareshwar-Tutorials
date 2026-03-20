@@ -18,21 +18,39 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
 
 class AuthService {
   final SupabaseClient _client;
+  UserModel? _cachedProfile;
 
   AuthService(this._client);
 
   // ── State ─────────────────────────────────────────────────
-  bool get isLoggedIn => _client.auth.currentSession != null;
+  bool get isLoggedIn =>
+      _client.auth.currentSession != null && (_cachedProfile?.isActive ?? true);
   User? get currentAuthUser => _client.auth.currentUser;
-  String? get currentRole => _client.auth.currentUser?.userMetadata?['role'] as String?;
+  String? get currentRole =>
+      _cachedProfile?.role ??
+      _client.auth.currentUser?.userMetadata?['role'] as String?;
+
+  Future<UserModel> _loadAndValidateProfile(String userId) async {
+    final profile = await fetchUserProfile(userId);
+    if (!profile.isActive) {
+      await _client.auth.signOut();
+      throw const AccountDisabledException();
+    }
+    return profile;
+  }
 
   // ── User stream ───────────────────────────────────────────
   Stream<UserModel?> get userStream async* {
     final authStream = _client.auth.onAuthStateChange;
     await for (final event in authStream) {
       if (event.session?.user != null) {
-        yield await fetchUserProfile(event.session!.user.id);
+        try {
+          yield await _loadAndValidateProfile(event.session!.user.id);
+        } catch (_) {
+          yield null;
+        }
       } else {
+        _cachedProfile = null;
         yield null;
       }
     }
@@ -54,20 +72,14 @@ class AuthService {
     if (res.user == null) throw Exception('Sign up failed');
 
     // Insert into users table
-    await _client.from('users').insert({
+    await _client.from('users').upsert({
       'id': res.user!.id,
       'name': name,
       'email': email,
       'role': role,
     });
 
-    return UserModel(
-      id: res.user!.id,
-      name: name,
-      email: email,
-      role: role,
-      createdAt: DateTime.now(),
-    );
+    return _loadAndValidateProfile(res.user!.id);
   }
 
   // ── Sign in with email ────────────────────────────────────
@@ -80,7 +92,7 @@ class AuthService {
       password: password,
     );
     if (res.user == null) throw Exception('Login failed');
-    return fetchUserProfile(res.user!.id);
+    return _loadAndValidateProfile(res.user!.id);
   }
 
   // ── Phone OTP ─────────────────────────────────────────────
@@ -108,7 +120,7 @@ class AuthService {
       'email': res.user!.email ?? '',
     });
 
-    return fetchUserProfile(res.user!.id);
+    return _loadAndValidateProfile(res.user!.id);
   }
 
   // ── Forgot password ───────────────────────────────────────
@@ -118,17 +130,16 @@ class AuthService {
 
   // ── Sign out ──────────────────────────────────────────────
   Future<void> signOut() async {
+    _cachedProfile = null;
     await _client.auth.signOut();
   }
 
   // ── Fetch profile ─────────────────────────────────────────
   Future<UserModel> fetchUserProfile(String userId) async {
-    final data = await _client
-        .from('users')
-        .select()
-        .eq('id', userId)
-        .single();
-    return UserModel.fromJson(data);
+    final data = await _client.from('users').select().eq('id', userId).single();
+    final profile = UserModel.fromJson(data);
+    _cachedProfile = profile;
+    return profile;
   }
 
   // ── Update profile ────────────────────────────────────────
@@ -145,4 +156,16 @@ class AuthService {
 
     await _client.from('users').update(updates).eq('id', userId);
   }
+}
+
+class AccountDisabledException implements Exception {
+  final String message;
+
+  const AccountDisabledException([
+    this.message =
+        'Your account has been disabled. Please contact the institute administrator.',
+  ]);
+
+  @override
+  String toString() => message;
 }

@@ -15,13 +15,14 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_router.dart';
 import '../../../../shared/models/models.dart';
 import '../../../../shared/services/app_providers.dart';
+import '../../../../shared/services/progress_service.dart';
 
 // ── Local state: tab filter ───────────────────────────────────
 enum _MyCoursesFilter { all, inProgress, completed }
 
-final _myCoursesFilterProvider =
-    StateProvider.autoDispose<_MyCoursesFilter>(
-        (_) => _MyCoursesFilter.all);
+final _myCoursesFilterProvider = StateProvider.autoDispose<_MyCoursesFilter>(
+  (_) => _MyCoursesFilter.all,
+);
 
 // ─────────────────────────────────────────────────────────────
 class MyCoursesScreen extends ConsumerWidget {
@@ -31,6 +32,7 @@ class MyCoursesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final enrolledAsync = ref.watch(enrolledCoursesProvider);
     final filter = ref.watch(_myCoursesFilterProvider);
+    final progressMapAsync = ref.watch(studentAllCourseProgressProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -48,8 +50,7 @@ class MyCoursesScreen extends ConsumerWidget {
               child: _FilterChips(
                 selected: filter,
                 onSelected: (f) =>
-                    ref.read(_myCoursesFilterProvider.notifier).state =
-                        f,
+                    ref.read(_myCoursesFilterProvider.notifier).state = f,
               ),
             ),
             actions: [
@@ -75,11 +76,12 @@ class MyCoursesScreen extends ConsumerWidget {
               ),
             ),
             data: (courses) {
-              final filtered = _applyFilter(courses, filter);
+              final progressMap =
+                  progressMapAsync.valueOrNull ??
+                  const <String, CourseProgress>{};
+              final filtered = _applyFilter(courses, filter, progressMap);
               if (filtered.isEmpty) {
-                return SliverFillRemaining(
-                  child: _EmptyState(filter: filter),
-                );
+                return SliverFillRemaining(child: _EmptyState(filter: filter));
               }
               return SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
@@ -89,7 +91,7 @@ class MyCoursesScreen extends ConsumerWidget {
                       const SizedBox(height: 12),
                   itemBuilder: (_, i) => _CourseProgressCard(
                     course: filtered[i],
-                    progress: _mockProgress(filtered[i].id),
+                    progress: progressMap[filtered[i].id]?.percent ?? 0,
                   ),
                 ),
               );
@@ -110,24 +112,23 @@ class MyCoursesScreen extends ConsumerWidget {
   }
 
   List<CourseModel> _applyFilter(
-      List<CourseModel> courses, _MyCoursesFilter f) {
+    List<CourseModel> courses,
+    _MyCoursesFilter f,
+    Map<String, CourseProgress> progressMap,
+  ) {
     switch (f) {
       case _MyCoursesFilter.all:
         return courses;
       case _MyCoursesFilter.inProgress:
-        return courses
-            .where((c) => _mockProgress(c.id) < 1.0)
-            .toList();
+        return courses.where((c) {
+          final progress = progressMap[c.id]?.percent ?? 0;
+          return progress > 0 && progress < 1.0;
+        }).toList();
       case _MyCoursesFilter.completed:
         return courses
-            .where((c) => _mockProgress(c.id) >= 1.0)
+            .where((c) => (progressMap[c.id]?.percent ?? 0) >= 1.0)
             .toList();
     }
-  }
-
-  static double _mockProgress(String id) {
-    final hash = id.codeUnits.fold(0, (a, b) => a + b);
-    return (hash % 10) / 10.0;
   }
 }
 
@@ -135,8 +136,7 @@ class MyCoursesScreen extends ConsumerWidget {
 class _FilterChips extends StatelessWidget {
   final _MyCoursesFilter selected;
   final ValueChanged<_MyCoursesFilter> onSelected;
-  const _FilterChips(
-      {required this.selected, required this.onSelected});
+  const _FilterChips({required this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -158,26 +158,23 @@ class _FilterChips extends StatelessWidget {
                 label: Text(label),
                 selected: isSelected,
                 onSelected: (_) => onSelected(f),
-                selectedColor:
-                    AppColors.primary.withValues(alpha: 0.12),
+                selectedColor: AppColors.primary.withValues(alpha: 0.12),
                 backgroundColor: AppColors.surface,
                 labelStyle: AppTextStyles.labelMedium.copyWith(
                   color: isSelected
                       ? AppColors.primary
                       : AppColors.textSecondary,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.w400,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 ),
                 side: BorderSide(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.border,
+                  color: isSelected ? AppColors.primary : AppColors.border,
                   width: isSelected ? 1.5 : 1,
                 ),
-                shape: RoundedRectangleBorder(
-                    borderRadius: AppRadius.lgAll),
+                shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
+                  horizontal: 12,
+                  vertical: 6,
+                ),
               ),
             );
           }).toList(),
@@ -192,22 +189,17 @@ class _CourseProgressCard extends StatelessWidget {
   final CourseModel course;
   final double progress; // 0.0–1.0
 
-  const _CourseProgressCard({
-    required this.course,
-    required this.progress,
-  });
+  const _CourseProgressCard({required this.course, required this.progress});
 
   @override
   Widget build(BuildContext context) {
     final pct = (progress * 100).round();
     final isCompleted = progress >= 1.0;
-    final progressColor =
-        isCompleted ? AppColors.success : AppColors.primary;
+    final progressColor = isCompleted ? AppColors.success : AppColors.primary;
 
     return AppCard(
       padding: EdgeInsets.zero,
-      onTap: () =>
-          context.push(AppRoutes.courseDetailPath(course.id)),
+      onTap: () => context.push(AppRoutes.courseDetailPath(course.id)),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
@@ -228,13 +220,17 @@ class _CourseProgressCard extends StatelessWidget {
                         course.thumbnailUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stack) => const Icon(
-                            Icons.school_rounded,
-                            color: Colors.white,
-                            size: 32),
+                          Icons.school_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                       ),
                     )
-                  : const Icon(Icons.school_rounded,
-                      color: Colors.white, size: 32),
+                  : const Icon(
+                      Icons.school_rounded,
+                      color: Colors.white,
+                      size: 32,
+                    ),
             ),
             const SizedBox(width: AppSpacing.sm),
 
@@ -272,7 +268,8 @@ class _CourseProgressCard extends StatelessWidget {
                     Text(
                       course.teacherName!,
                       style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textSecondary),
+                        color: AppColors.textSecondary,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -292,8 +289,7 @@ class _CourseProgressCard extends StatelessWidget {
                   const SizedBox(height: 6),
 
                   Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         '$pct% complete',
@@ -306,8 +302,9 @@ class _CourseProgressCard extends StatelessWidget {
                       ),
                       Text(
                         isCompleted ? 'Review →' : 'Continue →',
-                        style: AppTextStyles.labelSmall
-                            .copyWith(color: AppColors.primary),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.primary,
+                        ),
                       ),
                     ],
                   ),
@@ -336,8 +333,7 @@ class _EmptyState extends StatelessWidget {
           ? 'Enroll in a course to start learning!'
           : 'Try a different filter.',
       actionLabel: isAll ? 'Browse Courses' : null,
-      onAction:
-          isAll ? () => context.go(AppRoutes.search) : null,
+      onAction: isAll ? () => context.go(AppRoutes.search) : null,
     );
   }
 }

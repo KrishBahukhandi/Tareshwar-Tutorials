@@ -5,15 +5,16 @@
 //  video/PDF file uploads.
 // ─────────────────────────────────────────────────────────────
 import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/models/models.dart';
+import '../../../shared/services/storage_access_service.dart';
 import '../../../shared/services/supabase_service.dart';
 
-final contentUploadRepoProvider =
-    Provider<ContentUploadRepository>((ref) {
+final contentUploadRepoProvider = Provider<ContentUploadRepository>((ref) {
   return ContentUploadRepository(ref.watch(supabaseClientProvider));
 });
 
@@ -21,12 +22,50 @@ class ContentUploadRepository {
   final SupabaseClient _db;
   ContentUploadRepository(this._db);
 
-  // ════════════════════════════════════════════════════════
-  //  STORAGE UPLOAD HELPERS
-  // ════════════════════════════════════════════════════════
+  Future<void> _requireTeacherOwnsCourse(
+    String courseId,
+    String teacherId,
+  ) async {
+    final course = await _db
+        .from('courses')
+        .select('teacher_id')
+        .eq('id', courseId)
+        .maybeSingle();
+    if (course == null || course['teacher_id'] != teacherId) {
+      throw StateError('You do not have permission to manage this course.');
+    }
+  }
 
-  /// Upload [bytes] to [bucket] at [storagePath].
-  /// Returns the public URL of the uploaded file.
+  Future<String> _requireTeacherOwnsSubject(
+    String subjectId,
+    String teacherId,
+  ) async {
+    final subject = await _db
+        .from('subjects')
+        .select('course_id')
+        .eq('id', subjectId)
+        .maybeSingle();
+    if (subject == null) throw StateError('Subject not found.');
+    final courseId = subject['course_id'] as String;
+    await _requireTeacherOwnsCourse(courseId, teacherId);
+    return courseId;
+  }
+
+  Future<String> _requireTeacherOwnsChapter(
+    String chapterId,
+    String teacherId,
+  ) async {
+    final chapter = await _db
+        .from('chapters')
+        .select('subject_id')
+        .eq('id', chapterId)
+        .maybeSingle();
+    if (chapter == null) throw StateError('Chapter not found.');
+    final subjectId = chapter['subject_id'] as String;
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
+    return subjectId;
+  }
+
   Future<String> _uploadFile({
     required String bucket,
     required String storagePath,
@@ -36,80 +75,61 @@ class ContentUploadRepository {
   }) async {
     onProgress?.call(0.1);
 
-    await _db.storage.from(bucket).uploadBinary(
+    await _db.storage
+        .from(bucket)
+        .uploadBinary(
           storagePath,
           bytes,
-          fileOptions: FileOptions(
-            contentType: mimeType,
-            upsert: false,
-          ),
+          fileOptions: FileOptions(contentType: mimeType, upsert: false),
         );
 
     onProgress?.call(0.9);
-    final url = _db.storage.from(bucket).getPublicUrl(storagePath);
     onProgress?.call(1.0);
-    return url;
+    return StorageAccessService.buildStorageRef(
+      bucket: bucket,
+      path: storagePath,
+    );
   }
 
-  /// Builds a unique storage path scoped to the course.
-  String _storagePath({
-    required String courseId,
-    required String fileName,
-  }) =>
+  String _storagePath({required String courseId, required String fileName}) =>
       '$courseId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
-
-  // ════════════════════════════════════════════════════════
-  //  VIDEO UPLOAD
-  // ════════════════════════════════════════════════════════
 
   Future<String> uploadVideo({
     required String courseId,
     required String fileName,
     required Uint8List bytes,
     void Function(double progress)? onProgress,
-  }) =>
-      _uploadFile(
-        bucket: AppConstants.lectureVideosBucket,
-        storagePath: _storagePath(courseId: courseId, fileName: fileName),
-        bytes: bytes,
-        mimeType: _mimeFromExt(fileName) ?? 'video/mp4',
-        onProgress: onProgress,
-      );
-
-  // ════════════════════════════════════════════════════════
-  //  PDF / NOTES UPLOAD
-  // ════════════════════════════════════════════════════════
+  }) => _uploadFile(
+    bucket: AppConstants.lectureVideosBucket,
+    storagePath: _storagePath(courseId: courseId, fileName: fileName),
+    bytes: bytes,
+    mimeType: _mimeFromExt(fileName) ?? 'video/mp4',
+    onProgress: onProgress,
+  );
 
   Future<String> uploadPdf({
     required String courseId,
     required String fileName,
     required Uint8List bytes,
     void Function(double progress)? onProgress,
-  }) =>
-      _uploadFile(
-        bucket: AppConstants.notesBucket,
-        storagePath: _storagePath(courseId: courseId, fileName: fileName),
-        bytes: bytes,
-        mimeType: 'application/pdf',
-        onProgress: onProgress,
-      );
-
-  // ════════════════════════════════════════════════════════
-  //  SUBJECTS
-  // ════════════════════════════════════════════════════════
+  }) => _uploadFile(
+    bucket: AppConstants.notesBucket,
+    storagePath: _storagePath(courseId: courseId, fileName: fileName),
+    bytes: bytes,
+    mimeType: 'application/pdf',
+    onProgress: onProgress,
+  );
 
   Future<SubjectModel> createSubject({
+    required String teacherId,
     required String courseId,
     required String name,
     required int sortOrder,
   }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
         .from('subjects')
-        .insert({
-          'course_id': courseId,
-          'name': name,
-          'sort_order': sortOrder,
-        })
+        .insert({'course_id': courseId, 'name': name, 'sort_order': sortOrder})
         .select()
         .single();
     return SubjectModel.fromJson({
@@ -118,29 +138,33 @@ class ContentUploadRepository {
     });
   }
 
-  Future<List<SubjectModel>> fetchSubjects(String courseId) async {
+  Future<List<SubjectModel>> fetchSubjects(
+    String courseId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
         .from('subjects')
         .select()
         .eq('course_id', courseId)
         .order('sort_order');
     return data
-        .map((j) => SubjectModel.fromJson({
-              ...Map<String, dynamic>.from(j),
-              'chapters': <dynamic>[],
-            }))
+        .map(
+          (j) => SubjectModel.fromJson({
+            ...Map<String, dynamic>.from(j),
+            'chapters': <dynamic>[],
+          }),
+        )
         .toList();
   }
 
-  // ════════════════════════════════════════════════════════
-  //  CHAPTERS
-  // ════════════════════════════════════════════════════════
-
   Future<ChapterModel> createChapter({
+    required String teacherId,
     required String subjectId,
     required String name,
     required int sortOrder,
   }) async {
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
     final data = await _db
         .from('chapters')
         .insert({
@@ -156,47 +180,47 @@ class ContentUploadRepository {
     });
   }
 
-  Future<List<ChapterModel>> fetchChapters(String subjectId) async {
+  Future<List<ChapterModel>> fetchChapters(
+    String subjectId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsSubject(subjectId, teacherId);
     final data = await _db
         .from('chapters')
         .select()
         .eq('subject_id', subjectId)
         .order('sort_order');
     return data
-        .map((j) => ChapterModel.fromJson({
-              ...Map<String, dynamic>.from(j),
-              'lectures': <dynamic>[],
-            }))
+        .map(
+          (j) => ChapterModel.fromJson({
+            ...Map<String, dynamic>.from(j),
+            'lectures': <dynamic>[],
+          }),
+        )
         .toList();
   }
 
-  // ════════════════════════════════════════════════════════
-  //  LECTURES
-  // ════════════════════════════════════════════════════════
-
-  /// Full upload: picks up video/pdf bytes, pushes to Storage,
-  /// then inserts the lecture row.
   Future<LectureModel> createLecture({
+    required String teacherId,
     required String chapterId,
     required String courseId,
     required String title,
     String? description,
-    // Video
     Uint8List? videoBytes,
     String? videoFileName,
-    // PDF notes
     Uint8List? pdfBytes,
     String? pdfFileName,
-    // Meta
     int? durationSeconds,
     bool isFree = false,
     int sortOrder = 0,
     void Function(double progress)? onProgress,
   }) async {
+    await _requireTeacherOwnsCourse(courseId, teacherId);
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
+
     String? videoUrl;
     String? notesUrl;
 
-    // ── Upload video ──────────────────────────────────────
     if (videoBytes != null && videoFileName != null) {
       onProgress?.call(0.05);
       videoUrl = await uploadVideo(
@@ -207,7 +231,6 @@ class ContentUploadRepository {
       );
     }
 
-    // ── Upload PDF ────────────────────────────────────────
     if (pdfBytes != null && pdfFileName != null) {
       onProgress?.call(0.6);
       notesUrl = await uploadPdf(
@@ -220,7 +243,6 @@ class ContentUploadRepository {
 
     onProgress?.call(0.92);
 
-    // ── Insert DB row ─────────────────────────────────────
     final data = await _db
         .from('lectures')
         .insert({
@@ -240,7 +262,11 @@ class ContentUploadRepository {
     return LectureModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  Future<List<LectureModel>> fetchLectures(String chapterId) async {
+  Future<List<LectureModel>> fetchLectures(
+    String chapterId, {
+    required String teacherId,
+  }) async {
+    await _requireTeacherOwnsChapter(chapterId, teacherId);
     final data = await _db
         .from('lectures')
         .select()
@@ -251,10 +277,6 @@ class ContentUploadRepository {
         .toList();
   }
 
-  // ════════════════════════════════════════════════════════
-  //  MIME HELPER
-  // ════════════════════════════════════════════════════════
-
   static String? _mimeFromExt(String fileName) {
     final ext = fileName.split('.').last.toLowerCase();
     const map = {
@@ -263,7 +285,6 @@ class ContentUploadRepository {
       'mkv': 'video/x-matroska',
       'avi': 'video/x-msvideo',
       'webm': 'video/webm',
-      'pdf': 'application/pdf',
     };
     return map[ext];
   }
