@@ -1,0 +1,12 @@
+[build]
+  command = "bash build_web.sh"
+  publish = "build/web"
+
+[build.environment]
+  FLUTTER_VERSION = "3.41.5"
+
+# SPA routing — every path serves index.html
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
