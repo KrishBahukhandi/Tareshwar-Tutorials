@@ -35,6 +35,7 @@ enum AuthStatus {
   loading, // async operation in progress
   otpSent, // phone OTP dispatched; waiting for code input
   emailSent, // password-reset email dispatched
+  verificationEmailSent, // signup requires email confirmation
   error, // last operation failed; errorMessage is set
 }
 
@@ -62,6 +63,7 @@ class AuthState {
   bool get hasError => status == AuthStatus.error;
   bool get otpSent => status == AuthStatus.otpSent;
   bool get emailSent => status == AuthStatus.emailSent;
+  bool get verificationEmailSent => status == AuthStatus.verificationEmailSent;
   bool get isInitial => status == AuthStatus.initial;
 
   AuthState copyWith({
@@ -142,12 +144,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      final user = await _repo.signUp(
+      await _repo.signUp(
         email: email,
         password: password,
         name: name,
       );
-      state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _repo.signOut();
+      state = const AuthState(status: AuthStatus.verificationEmailSent);
     } on AuthException catch (e) {
       state = state.copyWith(
         status: AuthStatus.error,
@@ -261,14 +264,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (msg.contains('rate limit') || msg.contains('too many')) {
       return 'Too many attempts. Please try again in a few minutes.';
     }
-    if (msg.contains('network') || msg.contains('connection')) {
+    if (msg.contains('network') ||
+        msg.contains('connection') ||
+        msg.contains('host lookup') ||
+        msg.contains('name_not_resolved') ||
+        msg.contains('failed to fetch')) {
       return 'No internet connection. Please check your network.';
     }
     if (msg.contains('expired')) {
       return 'OTP has expired. Please request a new one.';
     }
     if (msg.contains('invalid otp') ||
-        msg.contains('token') ||
+        msg.contains('otp verification') ||
+        msg.contains('invalid_grant') ||
+        msg.contains('type sms') ||
+        msg.contains('type otp') ||
         msg.contains('otp')) {
       return 'Invalid OTP. Please check and try again.';
     }
@@ -288,7 +298,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
     if (msg.contains('network') ||
         msg.contains('socket') ||
-        msg.contains('connection')) {
+        msg.contains('connection') ||
+        msg.contains('host lookup') ||
+        msg.contains('name_not_resolved') ||
+        msg.contains('failed to fetch')) {
       return 'No internet connection. Please check your network.';
     }
     if (msg.contains('timeout')) {

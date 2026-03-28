@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:supabase_flutter/supabase_flutter.dart' as supa show User;
+import '../../../../core/constants/app_constants.dart';
 import '../../domain/entities/auth_user_entity.dart';
 
 class AuthRemoteDataSource {
@@ -82,10 +83,14 @@ class AuthRemoteDataSource {
     required String password,
     required String name,
   }) async {
+    final redirectTo = AppConstants.authRedirectUrl.isEmpty
+        ? null
+        : AppConstants.authRedirectUrl;
     final res = await _client.auth.signUp(
       email: email,
       password: password,
       data: {'name': name, 'role': 'student'},
+      emailRedirectTo: redirectTo,
     );
     if (res.user == null) throw Exception('Sign up failed');
 
@@ -102,7 +107,13 @@ class AuthRemoteDataSource {
 
   // ── Reset password ────────────────────────────────────────
   Future<void> resetPassword(String email) async {
-    await _client.auth.resetPasswordForEmail(email);
+    final redirectTo = AppConstants.authRedirectUrl.isEmpty
+        ? null
+        : AppConstants.authRedirectUrl;
+    await _client.auth.resetPasswordForEmail(
+      email,
+      redirectTo: redirectTo,
+    );
   }
 
   // ── Phone OTP ─────────────────────────────────────────────

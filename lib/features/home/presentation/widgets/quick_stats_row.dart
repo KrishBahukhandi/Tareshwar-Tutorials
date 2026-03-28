@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/theme/app_theme.dart' show AppSpacing;
 
 class QuickStatsRow extends StatelessWidget {
   final int enrolledCount;
@@ -29,14 +30,14 @@ class QuickStatsRow extends StatelessWidget {
           label: 'Courses',
           color: AppColors.primary,
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.xs),
         _StatChip(
           icon: Icons.play_circle_fill_rounded,
           value: '$completedLectures',
           label: 'Completed',
           color: AppColors.success,
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.xs),
         _StatChip(
           icon: Icons.quiz_rounded,
           value: '$testsTaken',

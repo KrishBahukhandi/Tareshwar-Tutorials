@@ -74,8 +74,6 @@ import '../../features/admin_batches/screens/batch_detail_screen.dart';
 import '../../features/admin_batches/screens/batch_students_screen.dart';
 import '../../features/admin_batches/data/admin_batches_service.dart'
     show AdminBatchListItem;
-import '../../features/admin_payments/screens/transactions_screen.dart';
-import '../../features/admin_payments/screens/revenue_analytics_screen.dart';
 import '../../features/admin_notifications/screens/create_announcement_screen.dart';
 import '../../features/courses/presentation/screens/student_batches_screen.dart';
 import '../../features/teacher_dashboard/screens/teacher_batches_screen.dart';
@@ -825,19 +823,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.adminPayments,
-        builder: (context, state) =>
-            _AdminShellSection(section: AdminSection.payments),
+        redirect: (context, state) => AppRoutes.adminDashboard,
       ),
 
       // ── Admin: Payment management (full-page screens) ──────
       GoRoute(
         path: AppRoutes.adminTransactions,
-        builder: (context, state) =>
-            TransactionsScreen(initialTab: state.extra as String?),
+        redirect: (context, state) => AppRoutes.adminDashboard,
       ),
       GoRoute(
         path: AppRoutes.adminRevenueAnalytics,
-        builder: (context, state) => const RevenueAnalyticsScreen(),
+        redirect: (context, state) => AppRoutes.adminDashboard,
       ),
       GoRoute(
         path: AppRoutes.adminAnnouncements,

@@ -22,6 +22,27 @@ class BatchService {
   final SupabaseClient _db;
   BatchService(this._db);
 
+  Future<String?> _currentRole() async {
+    final uid = _db.auth.currentUser?.id;
+    if (uid == null) return null;
+
+    final profile = await _db
+        .from('users')
+        .select('role')
+        .eq('id', uid)
+        .maybeSingle();
+    return profile?['role'] as String?;
+  }
+
+  Future<void> _requireEnrollmentManager() async {
+    final role = await _currentRole();
+    if (role != 'admin' && role != 'teacher') {
+      throw StateError(
+        'Students cannot self-enroll into batches. Please contact your institute administrator.',
+      );
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════
   //  BATCHES — Read
   // ═══════════════════════════════════════════════════════════
@@ -234,6 +255,8 @@ class BatchService {
     required String studentId,
     required String batchId,
   }) async {
+    await _requireEnrollmentManager();
+
     // Guard: prevent duplicate enrollment
     final already = await isStudentEnrolledInBatch(
         studentId: studentId, batchId: batchId);
@@ -261,6 +284,7 @@ class BatchService {
 
   /// Remove a student from a batch.
   Future<void> removeEnrollment(String enrollmentId) async {
+    await _requireEnrollmentManager();
     await _db.from('enrollments').delete().eq('id', enrollmentId);
   }
 
@@ -269,6 +293,7 @@ class BatchService {
     required String studentId,
     required String batchId,
   }) async {
+    await _requireEnrollmentManager();
     await _db
         .from('enrollments')
         .delete()

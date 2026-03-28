@@ -217,6 +217,18 @@ final testQuestionsProvider =
   return ref.watch(testServiceProvider).fetchQuestions(testId);
 });
 
+/// Student-safe question payload with answer keys stripped out.
+final studentTestQuestionsProvider =
+    FutureProvider.autoDispose.family<List<QuestionModel>, String>((ref, testId) {
+  return ref.watch(testServiceProvider).fetchStudentQuestions(testId);
+});
+
+/// Review payload exposed only after the current student has attempted the test.
+final testReviewQuestionsProvider =
+    FutureProvider.autoDispose.family<List<QuestionModel>, String>((ref, testId) {
+  return ref.watch(testServiceProvider).fetchReviewQuestions(testId);
+});
+
 /// Last attempt for a student on a test
 typedef _AttemptKey = ({String testId, String studentId});
 

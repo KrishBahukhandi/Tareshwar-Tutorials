@@ -64,7 +64,7 @@ class NotificationService {
     required String userId,
     required String title,
     required String body,
-    String type = 'general',
+    String type = 'announcement',
     String? referenceId,
   }) async {
     await _client.from('notifications').insert({

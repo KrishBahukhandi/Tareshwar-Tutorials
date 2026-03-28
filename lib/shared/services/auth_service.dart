@@ -63,10 +63,14 @@ class AuthService {
     required String name,
     String role = AppConstants.roleStudent,
   }) async {
+    final redirectTo = AppConstants.authRedirectUrl.isEmpty
+        ? null
+        : AppConstants.authRedirectUrl;
     final res = await _client.auth.signUp(
       email: email,
       password: password,
       data: {'name': name, 'role': role},
+      emailRedirectTo: redirectTo,
     );
 
     if (res.user == null) throw Exception('Sign up failed');
@@ -125,7 +129,13 @@ class AuthService {
 
   // ── Forgot password ───────────────────────────────────────
   Future<void> resetPassword(String email) async {
-    await _client.auth.resetPasswordForEmail(email);
+    final redirectTo = AppConstants.authRedirectUrl.isEmpty
+        ? null
+        : AppConstants.authRedirectUrl;
+    await _client.auth.resetPasswordForEmail(
+      email,
+      redirectTo: redirectTo,
+    );
   }
 
   // ── Sign out ──────────────────────────────────────────────

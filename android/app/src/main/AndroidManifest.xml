@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="tareshwar_tutorials"
+        android:label="Tareshwar Tutorials"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -83,8 +83,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Widget build(BuildContext context) {
     // ── Side-effects ─────────────────────────────────────────
     ref.listen<AuthState>(authProvider, (_, next) {
-      if (next.status == AuthStatus.authenticated) {
-        context.go(AppRoutes.homeTab);
+      if (next.status == AuthStatus.verificationEmailSent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account created. Please verify your email before signing in.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        context.go(AppRoutes.login);
       }
     });
 

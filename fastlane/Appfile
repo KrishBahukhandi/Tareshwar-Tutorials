@@ -1,0 +1,18 @@
+# ─── Android ──────────────────────────────────────────────────────────────────
+# The Play Store JSON key is passed as an env var in CI, not hardcoded here.
+# json_key_file is used when running Fastlane locally.
+# json_key_file(ENV["PLAY_STORE_JSON_KEY_PATH"])   # uncomment for local use
+
+package_name("com.tareshwar.tareshwar_tutorials")   # must match applicationId in build.gradle.kts
+
+# ─── iOS ──────────────────────────────────────────────────────────────────────
+# app_identifier must match the Bundle Identifier set in Xcode / App Store Connect.
+# Update this once you register the app in App Store Connect.
+app_identifier("com.tareshwar.tareshwarTutorials")  # ← update to your actual Bundle ID
+
+# Apple ID of the developer account that owns the app.
+# apple_id("your-apple-id@example.com")             # uncomment and fill in for local use
+
+# Team IDs are fetched automatically via App Store Connect API key in CI.
+# itc_team_id("YOUR_ITC_TEAM_ID")                   # App Store Connect team ID
+# team_id("YOUR_DEV_PORTAL_TEAM_ID")                # Developer Portal team ID

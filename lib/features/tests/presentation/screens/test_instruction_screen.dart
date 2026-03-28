@@ -13,7 +13,10 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_router.dart';
 import '../../../../shared/models/models.dart';
 import '../../../../shared/services/app_providers.dart'
-    show testDetailProvider, testQuestionsProvider, lastAttemptProvider;
+    show
+        testDetailProvider,
+        studentTestQuestionsProvider,
+        lastAttemptProvider;
 import '../../../../shared/services/auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -24,7 +27,7 @@ class TestInstructionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final testAsync = ref.watch(testDetailProvider(testId));
-    final questionsAsync = ref.watch(testQuestionsProvider(testId));
+    final questionsAsync = ref.watch(studentTestQuestionsProvider(testId));
     final userId = ref.read(authServiceProvider).currentAuthUser?.id ?? '';
 
     final lastAttemptAsync = ref.watch(

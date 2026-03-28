@@ -7,15 +7,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
+import 'audit_service.dart';
 import 'supabase_service.dart';
 
 final adminServiceProvider = Provider<AdminService>((ref) {
-  return AdminService(ref.watch(supabaseClientProvider));
+  return AdminService(
+    ref.watch(supabaseClientProvider),
+    ref.watch(auditServiceProvider),
+  );
 });
 
 class AdminService {
   final SupabaseClient _db;
-  AdminService(this._db);
+  final AuditService _audit;
+  AdminService(this._db, this._audit);
 
   // ═══════════════════════════════════════════════════════
   //  PLATFORM STATS
@@ -99,6 +104,12 @@ class AdminService {
         .from('users')
         .update({'role': newRole})
         .eq('id', userId);
+    await _audit.logAdminAction(
+      action: 'user.role_updated',
+      entityType: 'user',
+      entityId: userId,
+      details: {'role': newRole},
+    );
   }
 
   Future<void> toggleUserActive(String userId, bool isActive) async {
@@ -106,11 +117,21 @@ class AdminService {
         .from('users')
         .update({'is_active': isActive})
         .eq('id', userId);
+    await _audit.logAdminAction(
+      action: isActive ? 'user.activated' : 'user.suspended',
+      entityType: 'user',
+      entityId: userId,
+    );
   }
 
   Future<void> deleteUser(String userId) async {
     // Deleting from users cascades to auth.users via the FK
     await _db.from('users').delete().eq('id', userId);
+    await _audit.logAdminAction(
+      action: 'user.deleted',
+      entityType: 'user',
+      entityId: userId,
+    );
   }
 
   // ═══════════════════════════════════════════════════════
@@ -144,10 +165,20 @@ class AdminService {
         .from('courses')
         .update({'is_published': publish})
         .eq('id', courseId);
+    await _audit.logAdminAction(
+      action: publish ? 'course.published' : 'course.unpublished',
+      entityType: 'course',
+      entityId: courseId,
+    );
   }
 
   Future<void> deleteCourse(String courseId) async {
     await _db.from('courses').delete().eq('id', courseId);
+    await _audit.logAdminAction(
+      action: 'course.deleted',
+      entityType: 'course',
+      entityId: courseId,
+    );
   }
 
   // ═══════════════════════════════════════════════════════
@@ -222,6 +253,12 @@ class AdminService {
         .single();
 
     final map = Map<String, dynamic>.from(data as Map);
+    await _audit.logAdminAction(
+      action: 'batch.created',
+      entityType: 'batch',
+      entityId: map['id'] as String,
+      details: {'course_id': courseId, 'batch_name': batchName},
+    );
     return AdminBatchRow(
       id: map['id'] as String,
       batchName: map['batch_name'] as String,
@@ -264,10 +301,21 @@ class AdminService {
     if (isActive != null) update['is_active'] = isActive;
     if (update.isEmpty) return;
     await _db.from('batches').update(update).eq('id', batchId);
+    await _audit.logAdminAction(
+      action: 'batch.updated',
+      entityType: 'batch',
+      entityId: batchId,
+      details: update,
+    );
   }
 
   Future<void> deleteBatch(String batchId) async {
     await _db.from('batches').delete().eq('id', batchId);
+    await _audit.logAdminAction(
+      action: 'batch.deleted',
+      entityType: 'batch',
+      entityId: batchId,
+    );
   }
 
   // ═══════════════════════════════════════════════════════
@@ -307,6 +355,11 @@ class AdminService {
       'student_id': studentId,
       'batch_id': batchId,
     });
+    await _audit.logAdminAction(
+      action: 'enrollment.created',
+      entityType: 'enrollment',
+      details: {'student_id': studentId, 'batch_id': batchId},
+    );
   }
 
   Future<void> removeEnrollment(String enrollmentId) async {
@@ -314,6 +367,11 @@ class AdminService {
         .from('enrollments')
         .delete()
         .eq('id', enrollmentId);
+    await _audit.logAdminAction(
+      action: 'enrollment.deleted',
+      entityType: 'enrollment',
+      entityId: enrollmentId,
+    );
   }
 
   // ═══════════════════════════════════════════════════════
@@ -367,6 +425,11 @@ class AdminService {
       'title': title,
       'body': body,
     });
+    await _audit.logAdminAction(
+      action: 'announcement.created',
+      entityType: 'announcement',
+      details: {'batch_id': batchId, 'title': title},
+    );
   }
 
   /// Fetch recent announcements (admin view, newest first).
@@ -392,6 +455,11 @@ class AdminService {
         .from('announcements')
         .delete()
         .eq('id', announcementId);
+    await _audit.logAdminAction(
+      action: 'announcement.deleted',
+      entityType: 'announcement',
+      entityId: announcementId,
+    );
   }
 }
 

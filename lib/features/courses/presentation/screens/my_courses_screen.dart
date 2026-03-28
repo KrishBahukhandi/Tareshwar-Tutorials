@@ -13,6 +13,8 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/theme/app_widgets.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_router.dart';
+import 'package:shimmer/shimmer.dart';
+
 import '../../../../shared/models/models.dart';
 import '../../../../shared/services/app_providers.dart';
 import '../../../../shared/services/progress_service.dart';
@@ -64,8 +66,23 @@ class MyCoursesScreen extends ConsumerWidget {
 
           // ── Course list ────────────────────────────────────
           enrolledAsync.when(
-            loading: () => const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
+            loading: () => SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              sliver: SliverList.separated(
+                itemCount: 5,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (_, __) => Shimmer.fromColors(
+                  baseColor: AppColors.surfaceVariant,
+                  highlightColor: Colors.white,
+                  child: Container(
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
             ),
             error: (e, _) => SliverFillRemaining(
               child: AppEmptyState(

@@ -8,12 +8,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/theme/theme_barrel.dart';
 import '../../../../core/utils/app_router.dart';
 import '../../../../shared/models/models.dart';
 import '../../../../shared/services/auth_service.dart' show currentUserProvider;
+import '../../../../shared/services/app_providers.dart' show enrolledCoursesProvider;
 import '../providers/course_providers.dart'
     show courseDetailProvider, courseSubjectsProvider, courseProgressProvider, CourseProgress;
 import '../widgets/subject_tile.dart';
@@ -35,6 +38,11 @@ class CourseDetailScreen extends ConsumerWidget {
             (studentId: user.id, courseId: courseId)))
         : const AsyncValue<CourseProgress?>.data(null);
 
+    final enrolledAsync = ref.watch(enrolledCoursesProvider);
+    final isEnrolled = enrolledAsync.valueOrNull
+            ?.any((c) => c.id == courseId) ??
+        false;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -52,6 +60,7 @@ class CourseDetailScreen extends ConsumerWidget {
               subjectsAsync: subjectsAsync,
               courseId: courseId,
               progress: progressAsync.valueOrNull,
+              isEnrolled: isEnrolled,
             );
           },
         ),
@@ -68,12 +77,14 @@ class _CourseBody extends StatelessWidget {
   final AsyncValue<List<SubjectModel>> subjectsAsync;
   final String courseId;
   final CourseProgress? progress;
+  final bool isEnrolled;
 
   const _CourseBody({
     required this.course,
     required this.subjectsAsync,
     required this.courseId,
     this.progress,
+    required this.isEnrolled,
   });
 
   @override
@@ -108,7 +119,12 @@ class _CourseBody extends StatelessWidget {
 
         // ── Course Info Card ─────────────────────────
         SliverToBoxAdapter(
-          child: _CourseInfoCard(course: course, progress: progress),
+          child: _CourseInfoCard(
+            course: course,
+            progress: progress,
+            isEnrolled: isEnrolled,
+            courseId: courseId,
+          ),
         ),
 
         // ── Content Header ───────────────────────────
@@ -200,10 +216,10 @@ class _CourseHero extends StatelessWidget {
             ? CachedNetworkImage(
                 imageUrl: course.thumbnailUrl!,
                 fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
+                placeholder: (context, url) => Container(
                     decoration: const BoxDecoration(
                         gradient: AppColors.primaryGradient)),
-                errorWidget: (_, __, ___) => Container(
+                errorWidget: (context, url, error) => Container(
                     decoration: const BoxDecoration(
                         gradient: AppColors.primaryGradient)),
               )
@@ -274,7 +290,14 @@ class _CourseHero extends StatelessWidget {
 class _CourseInfoCard extends StatelessWidget {
   final CourseModel course;
   final CourseProgress? progress;
-  const _CourseInfoCard({required this.course, this.progress});
+  final bool isEnrolled;
+  final String courseId;
+  const _CourseInfoCard({
+    required this.course,
+    required this.isEnrolled,
+    required this.courseId,
+    this.progress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -331,20 +354,154 @@ class _CourseInfoCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
           ],
 
-          // ── Enroll CTA ────────────────────────────
-          PrimaryButton(
-            label: course.price == 0
-                ? 'Enroll for FREE'
-                : 'Enroll — ₹${course.price.toStringAsFixed(0)}',
-            icon: Icons.school_rounded,
-            onTap: () {},
-          ),
+          // ── Enroll / Continue CTA ─────────────────
+          if (isEnrolled)
+            PrimaryButton(
+              label: 'Continue Learning',
+              icon: Icons.play_circle_outline_rounded,
+              onTap: () => context.push(
+                AppRoutes.lectureListPath(courseId),
+              ),
+            )
+          else
+            PrimaryButton(
+              label: course.price == 0
+                  ? 'Enroll for FREE — Contact Us'
+                  : 'Enroll — ₹${course.price.toStringAsFixed(0)}',
+              icon: Icons.school_rounded,
+              onTap: () => _showEnrollSheet(context, course),
+            ),
         ],
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  Enrollment enquiry bottom sheet
+// ─────────────────────────────────────────────────────────────
+void _showEnrollSheet(BuildContext context, CourseModel course) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Enroll in ${course.title}',
+              style: AppTextStyles.headlineSmall),
+          const SizedBox(height: 8),
+          Text(
+            course.price == 0
+                ? 'This course is free. Contact us to get enrolled.'
+                : 'Course fee: ₹${course.price.toStringAsFixed(0)}. Contact us to complete your enrollment.',
+            style: AppTextStyles.bodyMedium
+                .copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 24),
+          _EnrollOption(
+            icon: Icons.phone_rounded,
+            label: 'Call Us',
+            subtitle: '+91 62805 54348',
+            onTap: () => launchUrl(Uri.parse('tel:+916280554348')),
+          ),
+          const SizedBox(height: 12),
+          _EnrollOption(
+            icon: Icons.chat_bubble_outline_rounded,
+            label: 'WhatsApp',
+            subtitle: 'Chat with us instantly',
+            onTap: () => launchUrl(
+              Uri.parse(
+                  'https://wa.me/916280554348?text=Hi%2C%20I%20want%20to%20enroll%20in%20${Uri.encodeComponent(course.title)}'),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _EnrollOption(
+            icon: Icons.email_outlined,
+            label: 'Email Us',
+            subtitle: 'support@tareshwartutorials.com',
+            onTap: () => launchUrl(
+              Uri.parse(
+                  'mailto:support@tareshwartutorials.com?subject=Enrollment%20-%20${Uri.encodeComponent(course.title)}'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _EnrollOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+  const _EnrollOption({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(fontWeight: FontWeight.w600)),
+                Text(subtitle,
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textSecondary)),
+              ],
+            ),
+            const Spacer(),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: AppColors.textHint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 class _StatChip extends StatelessWidget {
   final IconData icon;
   final String label;

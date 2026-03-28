@@ -59,6 +59,15 @@ class _DownloadButtonState extends ConsumerState<DownloadButton> {
           );
       // Refresh the list screen when done
       ref.invalidate(studentDownloadsProvider);
+    } on StateError catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

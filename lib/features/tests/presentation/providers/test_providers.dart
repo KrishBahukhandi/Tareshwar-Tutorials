@@ -127,7 +127,7 @@ class TestSessionNotifier extends StateNotifier<TestSessionState> {
   Future<void> _load() async {
     try {
       final test = await _service.fetchTest(testId);
-      final questions = await _service.fetchQuestions(testId);
+      final questions = await _service.fetchStudentQuestions(testId);
       state = state.copyWith(
         test: test,
         questions: questions,

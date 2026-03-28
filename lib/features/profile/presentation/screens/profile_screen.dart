@@ -4,10 +4,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/app_router.dart';
 import '../../../../shared/services/auth_service.dart';
+import '../../../../shared/services/app_providers.dart'
+    show enrolledCoursesProvider, studentAttemptsProvider;
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -18,111 +22,122 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       body: userAsync.when(
-        data: (user) => CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              pinned: true,
-              expandedHeight: 200,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: const BoxDecoration(
-                      gradient: AppColors.primaryGradient),
+        data: (user) {
+          final enrolledAsync = ref.watch(enrolledCoursesProvider);
+          final attemptsAsync = ref.watch(studentAttemptsProvider);
+          final enrolledCount = enrolledAsync.valueOrNull?.length ?? 0;
+          final testsCount = attemptsAsync.valueOrNull?.length ?? 0;
+
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                expandedHeight: 200,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: const BoxDecoration(
+                        gradient: AppColors.primaryGradient),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 40),
+                        CircleAvatar(
+                          radius: 44,
+                          backgroundColor: Colors.white,
+                          child: Text(
+                            (user?.name ?? 'S')[0].toUpperCase(),
+                            style: AppTextStyles.displayMedium
+                                .copyWith(color: AppColors.primary),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          user?.name ?? 'Student',
+                          style: AppTextStyles.headlineLarge
+                              .copyWith(color: Colors.white),
+                        ),
+                        Text(
+                          user?.email ?? '',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 40),
-                      CircleAvatar(
-                        radius: 44,
-                        backgroundColor: Colors.white,
-                        child: Text(
-                          (user?.name ?? 'S')[0].toUpperCase(),
-                          style: AppTextStyles.displayMedium
-                              .copyWith(color: AppColors.primary),
+                      // Stats Row
+                      Row(
+                        children: [
+                          _ProfileStat(
+                              label: 'Courses',
+                              value: enrolledCount.toString()),
+                          _ProfileStat(
+                              label: 'Tests',
+                              value: testsCount.toString()),
+                          const _ProfileStat(label: 'Rank', value: '-'),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Menu items
+                      _ProfileMenuItem(
+                        icon: Icons.book_outlined,
+                        label: 'Enrolled Courses',
+                        onTap: () => context.go(AppRoutes.myCourses),
+                      ),
+                      _ProfileMenuItem(
+                        icon: Icons.assignment_outlined,
+                        label: 'Test History',
+                        onTap: () => context.go(AppRoutes.testsTab),
+                      ),
+                      _ProfileMenuItem(
+                        icon: Icons.question_answer_outlined,
+                        label: 'My Doubts',
+                        onTap: () => context.go(AppRoutes.doubts),
+                      ),
+                      _ProfileMenuItem(
+                        icon: Icons.notifications_outlined,
+                        label: 'Notifications',
+                        onTap: () =>
+                            context.push(AppRoutes.notifications),
+                      ),
+                      _ProfileMenuItem(
+                        icon: Icons.help_outline_rounded,
+                        label: 'Help & Support',
+                        onTap: () => launchUrl(
+                          Uri.parse(
+                              'https://wa.me/916280554348?text=Hi%2C%20I%20need%20help%20with%20the%20Tareshwar%20Tutorials%20app'),
+                          mode: LaunchMode.externalApplication,
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        user?.name ?? 'Student',
-                        style: AppTextStyles.headlineLarge
-                            .copyWith(color: Colors.white),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      _ProfileMenuItem(
+                        icon: Icons.logout_rounded,
+                        label: 'Sign Out',
+                        color: AppColors.error,
+                        onTap: () async {
+                          await ref.read(authServiceProvider).signOut();
+                          if (context.mounted) {
+                            context.go(AppRoutes.login);
+                          }
+                        },
                       ),
-                      Text(
-                        user?.email ?? '',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: Colors.white70),
-                      ),
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    // Stats Row
-                    Row(
-                      children: const [
-                        _ProfileStat(label: 'Courses', value: '0'),
-                        _ProfileStat(label: 'Tests', value: '0'),
-                        _ProfileStat(label: 'Rank', value: '-'),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Menu items
-                    _ProfileMenuItem(
-                      icon: Icons.book_outlined,
-                      label: 'Enrolled Courses',
-                      onTap: () {},
-                    ),
-                    _ProfileMenuItem(
-                      icon: Icons.assignment_outlined,
-                      label: 'Test History',
-                      onTap: () {},
-                    ),
-                    _ProfileMenuItem(
-                      icon: Icons.workspace_premium_outlined,
-                      label: 'My Certificates',
-                      onTap: () {},
-                    ),
-                    _ProfileMenuItem(
-                      icon: Icons.receipt_long_outlined,
-                      label: 'Purchase History',
-                      onTap: () {},
-                    ),
-                    _ProfileMenuItem(
-                      icon: Icons.notifications_outlined,
-                      label: 'Notifications',
-                      onTap: () => context.go(AppRoutes.notifications),
-                    ),
-                    _ProfileMenuItem(
-                      icon: Icons.help_outline_rounded,
-                      label: 'Help & Support',
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 12),
-                    const Divider(),
-                    const SizedBox(height: 12),
-                    _ProfileMenuItem(
-                      icon: Icons.logout_rounded,
-                      label: 'Sign Out',
-                      color: AppColors.error,
-                      onTap: () async {
-                        await ref.read(authServiceProvider).signOut();
-                        if (context.mounted) {
-                          context.go(AppRoutes.login);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 32),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
       ),

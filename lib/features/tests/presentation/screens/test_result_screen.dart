@@ -12,7 +12,7 @@ import '../../../../core/theme/theme_barrel.dart';
 import '../../../../core/utils/app_router.dart';
 import '../../../../shared/models/models.dart';
 import '../../../../shared/services/app_providers.dart'
-    show testQuestionsProvider, testLeaderboardProvider;
+    show testReviewQuestionsProvider, testLeaderboardProvider;
 
 // ─────────────────────────────────────────────────────────────
 class TestResultScreen extends ConsumerWidget {
@@ -35,7 +35,7 @@ class TestResultScreen extends ConsumerWidget {
       );
     }
 
-    final questionsAsync = ref.watch(testQuestionsProvider(testId));
+    final questionsAsync = ref.watch(testReviewQuestionsProvider(testId));
     final isPassed = attempt.percentage >= 60;
     final gradeColor = isPassed ? AppColors.success : AppColors.error;
 
@@ -44,7 +44,7 @@ class TestResultScreen extends ConsumerWidget {
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: NestedScrollView(
-          headerSliverBuilder: (_, __) => [
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
               pinned: true,
               expandedHeight: 320,

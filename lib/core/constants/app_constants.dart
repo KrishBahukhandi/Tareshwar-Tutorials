@@ -6,10 +6,11 @@ class AppConstants {
   AppConstants._();
 
   // ── Supabase ──────────────────────────────────────────────
-  // TODO: Replace with your actual values from:
-  //   Supabase Dashboard → Settings → API
-  static const String supabaseUrl     = 'https://kufmoerpdmssjrqcsvfe.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1Zm1vZXJwZG1zc2pycWNzdmZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MTM0MDEsImV4cCI6MjA4ODE4OTQwMX0.F-V-VSN8pl6CYuMf9VMjSyFf9uekriybnWDJjwBYmrI';
+  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const String supabaseAnonKey =
+      String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const String authRedirectUrl =
+      String.fromEnvironment('AUTH_REDIRECT_URL');
 
   // ── App Info ──────────────────────────────────────────────
   static const String appName = 'Tareshwar Tutorials';

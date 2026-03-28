@@ -15,16 +15,20 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'download_database.dart';
 import 'download_model.dart';
 
 final downloadServiceProvider = Provider<DownloadService>((ref) {
-  return DownloadService();
+  return DownloadService(Supabase.instance.client);
 });
 
 // ─────────────────────────────────────────────────────────────
 class DownloadService {
+  DownloadService(this._client);
+
+  final SupabaseClient _client;
   final _db  = DownloadDatabase.instance;
   final _dio = Dio();
 
@@ -62,6 +66,49 @@ class DownloadService {
   Future<int> totalSizeBytes(String studentId) =>
       _db.totalSizeBytes(studentId);
 
+  Future<String?> _resolveCourseIdForLecture(String lectureId) async {
+    final lecture = await _client
+        .from('lectures')
+        .select('chapter_id')
+        .eq('id', lectureId)
+        .maybeSingle();
+    if (lecture == null) return null;
+
+    final chapter = await _client
+        .from('chapters')
+        .select('subject_id')
+        .eq('id', lecture['chapter_id'] as String)
+        .maybeSingle();
+    if (chapter == null) return null;
+
+    final subject = await _client
+        .from('subjects')
+        .select('course_id')
+        .eq('id', chapter['subject_id'] as String)
+        .maybeSingle();
+    return subject?['course_id'] as String?;
+  }
+
+  Future<bool> canAccessLecture({
+    required String lectureId,
+    required String studentId,
+  }) async {
+    final courseId = await _resolveCourseIdForLecture(lectureId);
+    if (courseId == null) return false;
+
+    final enrollments = await _client
+        .from('enrollments')
+        .select('id, batches!inner(course_id)')
+        .eq('student_id', studentId)
+        .eq('batches.course_id', courseId)
+        .limit(1);
+    return enrollments.isNotEmpty;
+  }
+
+  Future<bool> validateDownloadAccess(DownloadedLecture dl) {
+    return canAccessLecture(lectureId: dl.lectureId, studentId: dl.studentId);
+  }
+
   // ── Start a download ─────────────────────────────────────────
   Future<void> startDownload({
     required String lectureId,
@@ -71,6 +118,16 @@ class DownloadService {
     required String courseTitle,
     required int durationSeconds,
   }) async {
+    final hasAccess = await canAccessLecture(
+      lectureId: lectureId,
+      studentId: studentId,
+    );
+    if (!hasAccess) {
+      throw StateError(
+        'This lecture is no longer available for offline access on your account.',
+      );
+    }
+
     // Prevent duplicate downloads
     final existing = await _db.get(lectureId: lectureId, studentId: studentId);
     if (existing != null &&
@@ -202,6 +259,15 @@ class DownloadService {
   Future<bool> isFileValid(DownloadedLecture dl) async {
     if (!dl.isCompleted) return false;
     return File(dl.localPath).exists();
+  }
+
+  Future<void> purgeIfUnauthorized(DownloadedLecture dl) async {
+    final hasAccess = await validateDownloadAccess(dl);
+    if (hasAccess) return;
+
+    final file = File(dl.localPath);
+    if (await file.exists()) await file.delete();
+    await _db.delete(lectureId: dl.lectureId, studentId: dl.studentId);
   }
 
   // ── Local storage directory per student ────────────────────

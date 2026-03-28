@@ -20,6 +20,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../shared/services/auth_service.dart' show currentUserProvider;
 import '../../download_providers.dart';
 
 // ── Speed options ──────────────────────────────────────────────
@@ -85,9 +86,35 @@ class _DownloadedLecturePlayerState
       return;
     }
 
+    final user = ref.read(currentUserProvider).valueOrNull;
+    if (user == null) {
+      setState(() {
+        _error = 'Please sign in again to access offline downloads.';
+        _loading = false;
+      });
+      return;
+    }
+
+    final hasAccess =
+        await ref.read(downloadServiceProvider).validateDownloadAccess(dl);
+    if (!hasAccess) {
+      await ref.read(downloadServiceProvider).purgeIfUnauthorized(dl);
+      if (!mounted) return;
+      setState(() {
+        _error =
+            'This download is no longer available because your institute access changed. Please contact the admin if this is unexpected.';
+        _loading = false;
+      });
+      return;
+    }
+
     // Validate the file still exists
     final file = File(dl.localPath);
     if (!await file.exists()) {
+      await ref.read(downloadServiceProvider).deleteDownload(
+            lectureId: dl.lectureId,
+            studentId: dl.studentId,
+          );
       if (!mounted) return;
       setState(() {
         _error =
@@ -378,7 +405,7 @@ class _OverviewPanel extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'You are watching this lecture offline.\nInternet connection is not required.',
+                    'You are watching this lecture offline.\nInternet connection is not required, but offline access may expire if your institute enrollment changes.',
                     style: AppTextStyles.bodySmall,
                   ),
                 ),
@@ -463,6 +490,12 @@ class _ErrorView extends StatelessWidget {
             Text(
               message,
               style: const TextStyle(color: Colors.white60),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Downloads may be removed automatically if the file becomes invalid or your institute access changes.',
+              style: AppTextStyles.bodySmall.copyWith(color: Colors.white54),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),

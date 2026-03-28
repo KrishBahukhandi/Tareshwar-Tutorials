@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -58,6 +59,8 @@ class _AdminTeachersScreenState
                   .state = v,
               onRefresh: () =>
                   ref.invalidate(adminTeacherListProvider),
+              onAddTeacher: () =>
+                  _showCreateTeacherDialog(context, ref),
             ),
             const SizedBox(height: 20),
 
@@ -176,6 +179,19 @@ class _AdminTeachersScreenState
         .updateUserRole(user.id, newRole);
     ref.invalidate(adminTeacherListProvider);
   }
+
+  Future<void> _showCreateTeacherDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _CreateTeacherDialog(),
+    );
+    if (created == true) {
+      ref.invalidate(adminTeacherListProvider);
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -291,6 +307,7 @@ class _ListHeader extends StatelessWidget {
   final String searchHint;
   final ValueChanged<String> onSearch;
   final VoidCallback onRefresh;
+  final VoidCallback onAddTeacher;
 
   const _ListHeader({
     required this.title,
@@ -301,6 +318,7 @@ class _ListHeader extends StatelessWidget {
     required this.searchHint,
     required this.onSearch,
     required this.onRefresh,
+    required this.onAddTeacher,
   });
 
   @override
@@ -343,7 +361,241 @@ class _ListHeader extends StatelessWidget {
             side: const BorderSide(color: AppColors.surfaceVariant),
           ),
         ),
+        const SizedBox(width: 12),
+        FilledButton.icon(
+          icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+          label: const Text('Add Teacher'),
+          onPressed: onAddTeacher,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.info,
+            foregroundColor: Colors.white,
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _CreateTeacherDialog extends ConsumerStatefulWidget {
+  const _CreateTeacherDialog();
+
+  @override
+  ConsumerState<_CreateTeacherDialog> createState() =>
+      _CreateTeacherDialogState();
+}
+
+class _CreateTeacherDialogState
+    extends ConsumerState<_CreateTeacherDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+
+  bool _submitting = false;
+  bool _obscurePassword = true;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _submitting = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await ref.read(adminUsersServiceProvider).createTeacher(
+            name: _nameCtrl.text.trim(),
+            email: _emailCtrl.text.trim(),
+            password: _passwordCtrl.text,
+          );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Teacher account created for ${result.email}. Login credentials were emailed successfully.',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } on FunctionException catch (e) {
+      setState(() {
+        _errorMessage = e.details?.toString().isNotEmpty == true
+            ? e.details.toString()
+            : 'Could not create the teacher account right now.';
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: SizedBox(
+        width: 520,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Create Teacher Account',
+                  style: AppTextStyles.headlineMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The teacher will receive their login email and can later reset the password from the login screen.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: _nameCtrl,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Teacher Name',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Teacher name is required';
+                    }
+                    if (value.trim().length < 3) {
+                      return 'Enter a valid teacher name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Teacher Email',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                  validator: (value) {
+                    final email = value?.trim() ?? '';
+                    if (email.isEmpty) {
+                      return 'Teacher email is required';
+                    }
+                    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(email)) {
+                      return 'Enter a valid email address';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _passwordCtrl,
+                  obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    labelText: 'Temporary Password',
+                    prefixIcon: const Icon(Icons.lock_outline_rounded),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_rounded
+                            : Icons.visibility_off_rounded,
+                      ),
+                      onPressed: () => setState(
+                        () => _obscurePassword = !_obscurePassword,
+                      ),
+                    ),
+                  ),
+                  validator: (value) {
+                    final password = value ?? '';
+                    if (password.isEmpty) {
+                      return 'Temporary password is required';
+                    }
+                    if (password.length < 8) {
+                      return 'Use at least 8 characters';
+                    }
+                    return null;
+                  },
+                ),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.16),
+                      ),
+                    ),
+                    child: Text(
+                      _errorMessage!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed:
+                          _submitting ? null : () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 10),
+                    FilledButton(
+                      onPressed: _submitting ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.info,
+                      ),
+                      child: _submitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Create & Email'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

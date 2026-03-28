@@ -171,8 +171,18 @@ class _DashboardBody extends ConsumerWidget {
                   childCount: 2,
                 ),
               ),
-              error: (e, _) =>
-                  const SliverToBoxAdapter(child: SizedBox.shrink()),
+              error: (e, _) => SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  child: AppEmptyState(
+                    icon: Icons.wifi_off_rounded,
+                    title: 'Could not load courses',
+                    subtitle: 'Check your connection and pull down to refresh.',
+                    iconColor: AppColors.textHint,
+                  ),
+                ),
+              ),
               data: (courses) => courses.isEmpty
                   ? SliverToBoxAdapter(
                       child: Padding(

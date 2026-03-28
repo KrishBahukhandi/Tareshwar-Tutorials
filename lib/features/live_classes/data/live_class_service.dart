@@ -19,6 +19,61 @@ class LiveClassService {
   static const _select =
       '*, batches(batch_name, courses(title)), users!teacher_id(name)';
 
+  Future<String?> _currentRole() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return null;
+
+    final profile = await _client
+        .from('users')
+        .select('role')
+        .eq('id', uid)
+        .maybeSingle();
+    return profile?['role'] as String?;
+  }
+
+  Future<void> _requireTeacherOwnsBatch(String batchId, String teacherId) async {
+    final role = await _currentRole();
+    if (role == 'admin') return;
+
+    final batch = await _client
+        .from('batches')
+        .select('id, courses!inner(teacher_id)')
+        .eq('id', batchId)
+        .maybeSingle();
+
+    if (batch == null) {
+      throw StateError('Batch not found.');
+    }
+
+    final course = batch['courses'] as Map?;
+    if (course?['teacher_id'] != teacherId) {
+      throw StateError(
+        'You can only schedule live classes for your own batches.',
+      );
+    }
+  }
+
+  Future<void> _requireCanManageLiveClass(String liveClassId) async {
+    final uid = _client.auth.currentUser?.id;
+    final role = await _currentRole();
+    if (uid == null) {
+      throw StateError('You must be signed in to manage live classes.');
+    }
+    if (role == 'admin') return;
+
+    final row = await _client
+        .from('live_classes')
+        .select('teacher_id')
+        .eq('id', liveClassId)
+        .maybeSingle();
+    if (row == null) {
+      throw StateError('Live class not found.');
+    }
+    if (row['teacher_id'] != uid) {
+      throw StateError('You do not have permission to manage this live class.');
+    }
+  }
+
   // ─────────────────────────────────────────────────────────
   //  STUDENT: live classes for their enrolled batches
   // ─────────────────────────────────────────────────────────
@@ -108,6 +163,8 @@ class LiveClassService {
     required DateTime startTime,
     required int durationMinutes,
   }) async {
+    await _requireTeacherOwnsBatch(batchId, teacherId);
+
     final row = await _client
         .from('live_classes')
         .insert({
@@ -136,6 +193,8 @@ class LiveClassService {
     DateTime? startTime,
     int? durationMinutes,
   }) async {
+    await _requireCanManageLiveClass(id);
+
     final updates = <String, dynamic>{};
     if (title != null) updates['title'] = title;
     if (description != null) updates['description'] = description;
@@ -151,6 +210,7 @@ class LiveClassService {
   //  TEACHER: delete a live class
   // ─────────────────────────────────────────────────────────
   Future<void> deleteLiveClass(String id) async {
+    await _requireCanManageLiveClass(id);
     await _client.from('live_classes').delete().eq('id', id);
   }
 
@@ -163,6 +223,8 @@ class LiveClassService {
     required String title,
     required DateTime startTime,
   }) async {
+    await _requireCanManageLiveClass(liveClassId);
+
     // Get all student IDs in this batch
     final enrollments = await _client
         .from('enrollments')

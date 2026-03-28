@@ -9,6 +9,8 @@
 //  ▸ Role-based navigation after successful login
 //  ▸ Forgot password + Sign-up navigation
 // ─────────────────────────────────────────────────────────────
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,7 +23,6 @@ import '../../../../core/utils/app_router.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/auth_error_banner.dart';
 import '../widgets/auth_text_field.dart';
-import '../widgets/social_login_button.dart';
 
 // ─────────────────────────────────────────────────────────────
 class LoginScreen extends ConsumerStatefulWidget {
@@ -39,6 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _passwordCtrl = TextEditingController();
   final _phoneCtrl    = TextEditingController();
   bool _obscurePassword = true;
+  Timer? _errorDismissTimer;
 
   late final TabController _tabController;
 
@@ -49,11 +51,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _tabController.addListener(() {
       if (mounted) setState(() {});
       ref.read(authProvider.notifier).clearError();
+      _errorDismissTimer?.cancel();
+    });
+  }
+
+  void _scheduleErrorDismiss() {
+    _errorDismissTimer?.cancel();
+    _errorDismissTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) ref.read(authProvider.notifier).clearError();
     });
   }
 
   @override
   void dispose() {
+    _errorDismissTimer?.cancel();
     _tabController.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
@@ -94,7 +105,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     // ── Side-effects: listen for state transitions ─────────
-    ref.listen<AuthState>(authProvider, (_, next) {
+    ref.listen<AuthState>(authProvider, (prev, next) {
       if (next.status == AuthStatus.authenticated && next.user != null) {
         _navigateByRole(next.user!.role);
       }
@@ -102,6 +113,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         context.push(
           '${AppRoutes.otp}?phone=${Uri.encodeComponent(next.pendingPhone ?? '')}',
         );
+      }
+      if (next.hasError && !(prev?.hasError ?? false)) {
+        _scheduleErrorDismiss();
       }
     });
 
@@ -184,23 +198,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     ),
                   ),
 
-                const SizedBox(height: 28),
-                _OrDivider(),
-                const SizedBox(height: 28),
-
-                // ── Social login placeholder ───────────────
-                SocialLoginButton(
-                  icon: Icons.g_mobiledata_rounded,
-                  label: 'Continue with Google',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Google sign-in coming soon!'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                ),
                 const SizedBox(height: 40),
 
                 // ── Sign-up link ───────────────────────────
@@ -259,10 +256,9 @@ class _HeroHeader extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.school_rounded,
-              color: Colors.white,
-              size: 44,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
             ),
           ),
         ),
@@ -524,29 +520,6 @@ class _PrimaryButton extends StatelessWidget {
               )
             : Text(label, style: AppTextStyles.button),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  OR divider
-// ─────────────────────────────────────────────────────────────
-class _OrDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'OR',
-            style: AppTextStyles.labelSmall
-                .copyWith(color: AppColors.textHint, letterSpacing: 1),
-          ),
-        ),
-        const Expanded(child: Divider()),
-      ],
     );
   }
 }

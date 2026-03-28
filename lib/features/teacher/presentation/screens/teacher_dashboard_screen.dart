@@ -406,11 +406,21 @@ class _AnalyticsPlaceholder extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Center(
-              child: Text(
-                '📊 Detailed analytics coming soon.\nConnect fl_chart for real-time data.',
-                textAlign: TextAlign.center,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Open the analytics workspace to review student performance, course completion, leaderboard trends, and doubt resolution.',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.textSecondary, height: 1.6),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => context.push(AppRoutes.teacherAnalytics),
+                  icon: const Icon(Icons.analytics_rounded),
+                  label: const Text('Open Analytics'),
+                ),
+              ],
             ),
           ),
         ],

@@ -598,6 +598,10 @@ class QuestionModel {
     this.explanation,
   });
 
+  static const int redactedAnswerIndex = -1;
+
+  bool get hasAnswerKey => correctOptionIndex >= 0;
+
   factory QuestionModel.fromJson(Map<String, dynamic> json) => QuestionModel(
         id: json['id'] as String,
         testId: json['test_id'] as String,
@@ -607,6 +611,18 @@ class QuestionModel {
         correctOptionIndex: json['correct_option_index'] as int,
         marks: json['marks'] as int? ?? 4,
         explanation: json['explanation'] as String?,
+      );
+
+  factory QuestionModel.fromStudentJson(Map<String, dynamic> json) =>
+      QuestionModel(
+        id: json['id'] as String,
+        testId: json['test_id'] as String,
+        question: json['question'] as String,
+        questionImageUrl: json['question_image_url'] as String?,
+        options: List<String>.from(json['options'] as List),
+        correctOptionIndex: redactedAnswerIndex,
+        marks: json['marks'] as int? ?? 4,
+        explanation: null,
       );
 
   Map<String, dynamic> toJson() => {

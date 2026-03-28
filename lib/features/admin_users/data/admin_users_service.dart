@@ -82,6 +82,16 @@ class AdminTeacherDetail {
   });
 }
 
+class AdminTeacherInviteResult {
+  final String userId;
+  final String email;
+
+  const AdminTeacherInviteResult({
+    required this.userId,
+    required this.email,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Service
 // ─────────────────────────────────────────────────────────────
@@ -262,6 +272,37 @@ class AdminUsersService {
         .from('users')
         .update({'role': newRole})
         .eq('id', userId);
+  }
+
+  Future<AdminTeacherInviteResult> createTeacher({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final accessToken = _db.auth.currentSession?.accessToken;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw Exception(
+        'Your admin session has expired. Please sign out and sign in again.',
+      );
+    }
+
+    final response = await _db.functions.invoke(
+      'admin-create-teacher',
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: {
+        'name': name,
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      },
+    );
+
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return AdminTeacherInviteResult(
+      userId: data['user_id'] as String,
+      email: data['email'] as String,
+    );
   }
 
   // ── Delete user ───────────────────────────────────────────

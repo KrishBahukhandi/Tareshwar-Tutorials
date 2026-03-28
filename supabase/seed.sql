@@ -1,0 +1,3 @@
+-- Local development seed file.
+-- Keep this file present because Supabase config references it.
+-- Production-like users should be created manually or through institute onboarding steps.

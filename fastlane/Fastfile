@@ -1,0 +1,101 @@
+# Fastfile — Tareshwar Tutorials
+# Handles Android (Play Store) and iOS (TestFlight / App Store) releases.
+# Called from GitHub Actions workflows; can also be run locally.
+
+default_platform(:android)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ANDROID
+# ─────────────────────────────────────────────────────────────────────────────
+
+platform :android do
+  desc "Upload a pre-built AAB to Play Store on the specified track"
+  lane :deploy do |options|
+    track = options[:track] || "internal"
+
+    UI.message("📦 Uploading AAB to Play Store track: #{track}")
+
+    # The AAB must already be built before this lane runs.
+    # The GitHub Actions workflow builds it via: flutter build appbundle --release
+    upload_to_play_store(
+      track:                   track,
+      aab:                     "../build/app/outputs/bundle/release/app-release.aab",
+      # Pass JSON key as env var in CI (PLAY_STORE_JSON_KEY_DATA)
+      # or as a file path when running locally (PLAY_STORE_JSON_KEY_PATH)
+      json_key_data:           ENV["PLAY_STORE_JSON_KEY_DATA"],
+      skip_upload_metadata:    true,   # manage metadata manually in Play Console
+      skip_upload_images:      true,
+      skip_upload_screenshots: true,
+      release_status:          track == "production" ? "completed" : "draft",
+    )
+
+    UI.success("✅ Android release uploaded to Play Store (#{track})")
+  end
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# iOS
+# ─────────────────────────────────────────────────────────────────────────────
+
+platform :ios do
+  desc "Sign, package, and upload a Flutter iOS build to TestFlight"
+  lane :deploy do
+    # ── App Store Connect API Key (avoids 2FA issues in CI) ─────────────
+    api_key = app_store_connect_api_key(
+      key_id:       ENV["APP_STORE_CONNECT_API_KEY_ID"],
+      issuer_id:    ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content:  ENV["APP_STORE_CONNECT_PRIVATE_KEY"],
+      in_house:     false,
+    )
+
+    # ── Sync signing certificates via Fastlane Match ─────────────────────
+    # Match reads certificates from a private Git repo (MATCH_GIT_URL secret).
+    # readonly: true — never create new certs in CI, only read existing ones.
+    sync_code_signing(
+      type:       "appstore",
+      readonly:   true,
+      git_url:    ENV["MATCH_GIT_URL"],
+      password:   ENV["MATCH_PASSWORD"],
+      app_identifier: "com.tareshwar.tareshwarTutorials",  # ← must match Appfile
+    )
+
+    # ── Build & sign the IPA ─────────────────────────────────────────────
+    # Flutter already compiled the Xcode project in the CI workflow step
+    # (`flutter build ios --release --no-codesign`).
+    # Here we just package + sign it.
+    build_app(
+      workspace:       "ios/Runner.xcworkspace",
+      scheme:          "Runner",
+      export_method:   "app-store",
+      export_options: {
+        uploadBitcode:   false,
+        uploadSymbols:   true,
+        compileBitcode:  false,
+      },
+      output_directory: "build/ios/ipa",
+      output_name:      "TareshwarTutorials.ipa",
+    )
+
+    # ── Upload to TestFlight ─────────────────────────────────────────────
+    upload_to_testflight(
+      api_key:                           api_key,
+      skip_waiting_for_build_processing: true,   # don't block CI waiting for Apple
+      distribute_external:               false,   # internal testers only by default
+    )
+
+    # ── Optionally submit for App Store review ───────────────────────────
+    if ENV["SUBMIT_FOR_REVIEW"] == "true"
+      UI.message("🚀 Submitting for App Store review...")
+      deliver(
+        api_key:                           api_key,
+        submit_for_review:                 true,
+        automatic_release:                 false,
+        skip_metadata:                     true,
+        skip_screenshots:                  true,
+        force:                             true,
+      )
+    end
+
+    UI.success("✅ iOS build uploaded to TestFlight")
+  end
+end

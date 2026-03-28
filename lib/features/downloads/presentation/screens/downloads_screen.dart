@@ -95,6 +95,7 @@ class _DownloadsView extends ConsumerWidget {
               orElse: () => const SizedBox.shrink(),
             ),
           ),
+          const SliverToBoxAdapter(child: _DownloadsAccessNotice()),
 
           // ── Content ───────────────────────────────────────
           downloadsAsync.when(
@@ -383,6 +384,42 @@ class _StorageSummary extends StatelessWidget {
             ),
             const Icon(Icons.info_outline_rounded,
                 color: Colors.white60, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadsAccessNotice extends StatelessWidget {
+  const _DownloadsAccessNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.warning.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.warning.withValues(alpha: 0.24),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                color: AppColors.warning),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Downloads are available only while your institute access remains active. Invalid or expired downloads are removed automatically.',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary, height: 1.5),
+              ),
+            ),
           ],
         ),
       ),

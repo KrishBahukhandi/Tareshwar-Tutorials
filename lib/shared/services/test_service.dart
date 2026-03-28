@@ -124,6 +124,30 @@ class TestService {
         .toList();
   }
 
+  Future<List<QuestionModel>> fetchStudentQuestions(String testId) async {
+    final data = await _client.rpc(
+      'get_student_test_questions',
+      params: {'p_test_id': testId},
+    );
+    return (data as List)
+        .map(
+          (q) => QuestionModel.fromStudentJson(
+            Map<String, dynamic>.from(q as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<QuestionModel>> fetchReviewQuestions(String testId) async {
+    final data = await _client.rpc(
+      'get_student_test_review_questions',
+      params: {'p_test_id': testId},
+    );
+    return (data as List)
+        .map((q) => QuestionModel.fromJson(Map<String, dynamic>.from(q as Map)))
+        .toList();
+  }
+
   Future<List<TestAttemptModel>> fetchAttempts({
     String? testId,
     String? studentId,
@@ -158,52 +182,15 @@ class TestService {
     required Map<String, int> answers,
     required int timeTakenSeconds,
   }) async {
-    int score = 0;
-    int correct = 0;
-    int wrong = 0;
-    int skipped = 0;
-
-    final testData = await _client
-        .from('tests')
-        .select('negative_marks')
-        .eq('id', testId)
-        .single();
-    final negMarks = (testData['negative_marks'] as num).toDouble();
-
-    for (final q in questions) {
-      final selected = answers[q.id];
-      if (selected == null) {
-        skipped++;
-      } else if (selected == q.correctOptionIndex) {
-        score += q.marks;
-        correct++;
-      } else {
-        score -= (negMarks * q.marks).round();
-        wrong++;
-      }
-    }
-
-    final totalMarks = questions.fold(0, (sum, q) => sum + q.marks);
-    score = score.clamp(0, totalMarks);
-
-    final data = await _client
-        .from('test_attempts')
-        .insert({
-          'test_id': testId,
-          'student_id': studentId,
-          'score': score,
-          'total_marks': totalMarks,
-          'correct_answers': correct,
-          'wrong_answers': wrong,
-          'skipped': skipped,
-          'time_taken_seconds': timeTakenSeconds,
-          'answers': answers,
-          'attempted_at': DateTime.now().toIso8601String(),
-        })
-        .select()
-        .single();
-
-    return TestAttemptModel.fromJson(data);
+    final data = await _client.rpc(
+      'submit_test_attempt',
+      params: {
+        'p_test_id': testId,
+        'p_answers': answers,
+        'p_time_taken_seconds': timeTakenSeconds,
+      },
+    );
+    return TestAttemptModel.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   Future<List<TestAttemptModel>> fetchLeaderboard(String testId) async {

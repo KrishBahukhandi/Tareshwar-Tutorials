@@ -529,7 +529,7 @@ class _LecturePlayerScreenState extends ConsumerState<LecturePlayerScreen>
             if (lecture.videoUrl != null)
               DownloadButton(
                 lecture: lecture,
-                courseTitle: '',
+                courseTitle: lecture.title,
                 compact: true,
               ),
             const SizedBox(width: 6),
