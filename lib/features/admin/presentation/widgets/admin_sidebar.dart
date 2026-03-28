@@ -32,6 +32,7 @@ class AdminSidebar extends ConsumerWidget {
     (section: AdminSection.courses,       icon: Icons.menu_book_rounded),
     (section: AdminSection.batches,       icon: Icons.group_work_rounded),
     (section: AdminSection.liveClasses,   icon: Icons.video_camera_front_rounded),
+    (section: AdminSection.payments,      icon: Icons.payments_rounded),
     (section: AdminSection.announcements, icon: Icons.campaign_rounded),
     (section: AdminSection.analytics,     icon: Icons.bar_chart_rounded),
     (section: AdminSection.settings,      icon: Icons.settings_rounded),

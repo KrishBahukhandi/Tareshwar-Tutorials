@@ -9,6 +9,7 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/app_widgets.dart';
 import '../../../../shared/services/admin_service.dart';
+import '../../../../shared/services/auth_service.dart';
 import '../providers/admin_providers.dart';
 import '../widgets/admin_top_bar.dart';
 
@@ -18,6 +19,7 @@ class AdminOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(adminStatsProvider);
+    final adminName = ref.watch(currentUserProvider).valueOrNull?.name.split(' ').first ?? 'Admin';
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -29,7 +31,7 @@ class AdminOverviewScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Greeting ──────────────────────────────────
-              Text('Welcome back, Admin 👋',
+              Text('Welcome back, $adminName 👋',
                   style: AppTextStyles.displaySmall),
               const SizedBox(height: 4),
               Text('Here\'s what\'s happening on the platform today.',

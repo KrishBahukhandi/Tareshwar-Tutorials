@@ -20,20 +20,20 @@ class TeacherSidebar extends ConsumerWidget {
     required this.onToggle,
   });
 
-  static const _sidebarBg = Color(0xFF1C1B2E);
-  static const _activeColor = AppColors.primary;
+  static const _sidebarBg     = Color(0xFF1C1B2E);
+  static const _activeBg      = Color(0xFF6C63FF);
   static const _inactiveColor = Color(0xFF9CA3AF);
 
   static const _navItems = <({TeacherSection section, IconData icon})>[
-    (section: TeacherSection.overview, icon: Icons.dashboard_rounded),
-    (section: TeacherSection.myCourses, icon: Icons.menu_book_rounded),
-    (section: TeacherSection.batches, icon: Icons.group_work_rounded),
-    (section: TeacherSection.liveClasses, icon: Icons.video_camera_front_rounded),
+    (section: TeacherSection.overview,      icon: Icons.dashboard_rounded),
+    (section: TeacherSection.myCourses,     icon: Icons.menu_book_rounded),
+    (section: TeacherSection.batches,       icon: Icons.group_work_rounded),
+    (section: TeacherSection.liveClasses,   icon: Icons.video_camera_front_rounded),
     (section: TeacherSection.uploadContent, icon: Icons.upload_file_rounded),
-    (section: TeacherSection.createTest, icon: Icons.quiz_rounded),
+    (section: TeacherSection.createTest,    icon: Icons.quiz_rounded),
     (section: TeacherSection.studentDoubts, icon: Icons.chat_bubble_outline_rounded),
-    (section: TeacherSection.analytics, icon: Icons.bar_chart_rounded),
-    (section: TeacherSection.settings, icon: Icons.settings_rounded),
+    (section: TeacherSection.analytics,     icon: Icons.bar_chart_rounded),
+    (section: TeacherSection.settings,      icon: Icons.settings_rounded),
   ];
 
   @override
@@ -43,28 +43,28 @@ class TeacherSidebar extends ConsumerWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeInOut,
-      width: collapsed ? 64 : 240,
+      width: collapsed ? 68 : 240,
       decoration: const BoxDecoration(
         color: _sidebarBg,
         boxShadow: [
           BoxShadow(
-            color: Colors.black26,
-            blurRadius: 8,
-            offset: Offset(2, 0),
+            color: Colors.black38,
+            blurRadius: 12,
+            offset: Offset(3, 0),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Logo / Brand ─────────────────────────────────
+          // ── Logo / Brand + collapse toggle ───────────────
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+            padding: const EdgeInsets.fromLTRB(14, 22, 14, 16),
             child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 38,
+                  height: 38,
                   decoration: const BoxDecoration(
                     gradient: AppColors.primaryGradient,
                     shape: BoxShape.circle,
@@ -75,41 +75,63 @@ class TeacherSidebar extends ConsumerWidget {
                 if (!collapsed) ...[
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      'Teacher Panel',
-                      style: AppTextStyles.headlineSmall.copyWith(
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Teacher Panel',
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Tareshwar Tutorials',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: _inactiveColor,
+                            fontSize: 10,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
                 ],
+                GestureDetector(
+                  onTap: onToggle,
+                  child: Icon(
+                    collapsed
+                        ? Icons.chevron_right_rounded
+                        : Icons.chevron_left_rounded,
+                    color: _inactiveColor,
+                    size: 20,
+                  ),
+                ),
               ],
             ),
           ),
 
-          const Divider(color: Colors.white12, height: 1),
+          const Divider(color: Colors.white10, height: 1),
           const SizedBox(height: 8),
 
           // ── Navigation items ─────────────────────────────
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
               children: _navItems.map((item) {
                 final isActive = current == item.section;
-                return _NavItem(
+                return _NavTile(
                   icon: item.icon,
                   label: item.section.label,
                   isActive: isActive,
                   collapsed: collapsed,
-                  activeColor: _activeColor,
+                  activeBg: _activeBg,
                   inactiveColor: _inactiveColor,
                   onTap: () {
                     ref
                         .read(teacherSelectedSectionProvider.notifier)
                         .state = item.section;
-                    // Close drawer on mobile
                     if (Navigator.of(context).canPop()) {
                       Navigator.of(context).pop();
                     }
@@ -119,63 +141,33 @@ class TeacherSidebar extends ConsumerWidget {
             ),
           ),
 
-          const Divider(color: Colors.white12, height: 1),
+          const Divider(color: Colors.white10, height: 1),
 
-          // ── Logout ───────────────────────────────────────
-          _NavItem(
-            icon: Icons.logout_rounded,
-            label: 'Logout',
-            isActive: false,
-            collapsed: collapsed,
-            activeColor: _activeColor,
-            inactiveColor: _inactiveColor,
-            onTap: () async {
-              await ref.read(authServiceProvider).signOut();
-            },
-          ),
-
-          const SizedBox(height: 8),
-
-          // ── Collapse toggle (desktop only) ───────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: onToggle,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Icon(
-                  collapsed
-                      ? Icons.chevron_right_rounded
-                      : Icons.chevron_left_rounded,
-                  color: _inactiveColor,
-                  size: 22,
-                ),
-              ),
-            ),
-          ),
+          // ── Bottom: user profile + logout ─────────────────
+          _BottomUserTile(collapsed: collapsed),
+          const SizedBox(height: 12),
         ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-class _NavItem extends StatelessWidget {
+// ── Nav Tile ──────────────────────────────────────────────────
+class _NavTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
   final bool collapsed;
-  final Color activeColor;
+  final Color activeBg;
   final Color inactiveColor;
   final VoidCallback onTap;
 
-  const _NavItem({
+  const _NavTile({
     required this.icon,
     required this.label,
     required this.isActive,
     required this.collapsed,
-    required this.activeColor,
+    required this.activeBg,
     required this.inactiveColor,
     required this.onTap,
   });
@@ -183,41 +175,33 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
-        color: isActive
-            ? activeColor.withAlpha(30)
-            : Colors.transparent,
+        color: isActive ? activeBg : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: collapsed ? 10 : 12,
-              vertical: 10,
-            ),
+                horizontal: collapsed ? 14 : 12, vertical: 11),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: collapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
-                Icon(
-                  icon,
-                  size: 20,
-                  color: isActive ? activeColor : inactiveColor,
-                ),
+                Icon(icon,
+                    size: 20,
+                    color: isActive ? Colors.white : inactiveColor),
                 if (!collapsed) ...[
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: isActive ? activeColor : inactiveColor,
-                        fontWeight: isActive
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                        fontSize: 13,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight:
+                          isActive ? FontWeight.w600 : FontWeight.w400,
+                      color: isActive ? Colors.white : inactiveColor,
                     ),
                   ),
                 ],
@@ -226,6 +210,70 @@ class _NavItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Bottom user tile ──────────────────────────────────────────
+class _BottomUserTile extends ConsumerWidget {
+  final bool collapsed;
+  const _BottomUserTile({required this.collapsed});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(currentUserProvider);
+    return userAsync.when(
+      loading: () => const SizedBox(height: 48),
+      error: (_, __) => const SizedBox(height: 48),
+      data: (user) {
+        if (user == null) return const SizedBox(height: 48);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.3),
+                child: Text(
+                  user.name.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (!collapsed) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(user.name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis),
+                      Text('Teacher',
+                          style: TextStyle(
+                              color: AppColors.primary.withValues(alpha: 0.8),
+                              fontSize: 10)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded,
+                      color: Color(0xFF9CA3AF), size: 18),
+                  tooltip: 'Logout',
+                  onPressed: () async {
+                    await ref.read(authServiceProvider).signOut();
+                  },
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
