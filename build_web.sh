@@ -34,6 +34,6 @@ flutter pub get
 flutter build web --release \
   --dart-define=SUPABASE_URL="${SUPABASE_URL}" \
   --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}" \
-  --dart-define=AUTH_REDIRECT_URL="${AUTH_REDIRECT_URL}"
+  --dart-define=AUTH_REDIRECT_URL="${AUTH_REDIRECT_URL:-}"
 
 echo "✓ Build complete → build/web"
