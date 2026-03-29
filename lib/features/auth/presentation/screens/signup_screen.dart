@@ -84,15 +84,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     // ── Side-effects ─────────────────────────────────────────
     ref.listen<AuthState>(authProvider, (_, next) {
       if (next.status == AuthStatus.verificationEmailSent) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Account created. Please verify your email before signing in.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        context.go(AppRoutes.login);
+        context.go(AppRoutes.emailVerificationPath(_emailCtrl.text.trim()));
       }
     });
 

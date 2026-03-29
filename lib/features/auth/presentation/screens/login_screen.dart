@@ -242,24 +242,10 @@ class _HeroHeader extends StatelessWidget {
       children: [
         // App logo
         Center(
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.35),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
-            ),
+          child: Image.asset(
+            'assets/images/logo.png',
+            height: 90,
+            fit: BoxFit.contain,
           ),
         ),
         const SizedBox(height: 28),

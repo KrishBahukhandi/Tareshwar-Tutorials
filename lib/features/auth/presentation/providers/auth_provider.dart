@@ -250,6 +250,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ── Error message mapping ─────────────────────────────────
   String _mapAuthError(String raw) {
     final msg = raw.toLowerCase();
+    if (msg.contains('email not confirmed') ||
+        msg.contains('not confirmed')) {
+      return 'Your email is not verified yet. Please check your inbox and click the verification link.';
+    }
     if (msg.contains('invalid login') ||
         msg.contains('invalid credentials') ||
         msg.contains('wrong password')) {

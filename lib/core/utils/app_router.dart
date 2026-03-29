@@ -9,6 +9,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/otp_screen.dart';
+import '../../features/auth/presentation/screens/email_verification_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/courses/presentation/screens/my_courses_screen.dart';
@@ -101,6 +102,9 @@ class AppRoutes {
   static const String signup = '/signup';
   static const String forgotPassword = '/forgot-password';
   static const String otp = '/otp';
+  static const String emailVerification = '/email-verification';
+  static String emailVerificationPath(String email) =>
+      '/email-verification?email=${Uri.encodeComponent(email)}';
 
   // ── Student shell root ────────────────────────────────────
   static const String studentDashboard = '/student';
@@ -333,13 +337,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final role = authService.currentRole;
       final loc = state.matchedLocation;
 
-      final isAuthRoute = const [
+      final isAuthRoute = [
         AppRoutes.login,
         AppRoutes.signup,
         AppRoutes.otp,
         AppRoutes.forgotPassword,
         AppRoutes.onboarding,
         AppRoutes.splash,
+        AppRoutes.emailVerification,
       ].contains(loc);
 
       final isTeacherAuthRoute = loc == AppRoutes.teacherLogin;
@@ -426,6 +431,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.otp,
         builder: (context, state) =>
             OtpScreen(phone: state.uri.queryParameters['phone'] ?? ''),
+      ),
+      GoRoute(
+        path: AppRoutes.emailVerification,
+        builder: (context, state) => EmailVerificationScreen(
+          email: state.uri.queryParameters['email'] ?? '',
+        ),
       ),
 
       // ── Student shell (6-tab StatefulShellRoute) ──────────
