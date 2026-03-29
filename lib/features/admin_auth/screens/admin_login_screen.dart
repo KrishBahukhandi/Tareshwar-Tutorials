@@ -202,29 +202,28 @@ class _AdminBrand extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Shield icon badge
+        // Logo in white card
         Container(
-          width: 72,
-          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF6C63FF), Color(0xFF4B44CC)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: Colors.white.withValues(alpha: 0.96),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
+                color: const Color(0xFF6C63FF).withValues(alpha: 0.3),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: const Icon(Icons.admin_panel_settings_rounded,
-              color: Colors.white, size: 36),
+          child: Image.asset(
+            'assets/images/logo.png',
+            width: 200,
+            height: 64,
+            fit: BoxFit.contain,
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         Text(
           'Admin Portal',
           style: AppTextStyles.displaySmall.copyWith(
@@ -235,10 +234,9 @@ class _AdminBrand extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Tareshwar Tutorials',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: Colors.white.withValues(alpha: 0.5),
-            letterSpacing: 1.2,
+          'Restricted access • Administrators only',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: Colors.white.withValues(alpha: 0.45),
           ),
         ),
       ],

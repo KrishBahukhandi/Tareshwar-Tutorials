@@ -59,45 +59,37 @@ class TeacherSidebar extends ConsumerWidget {
         children: [
           // ── Logo / Brand + collapse toggle ───────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 22, 14, 16),
+            padding: const EdgeInsets.fromLTRB(12, 20, 12, 14),
             child: Row(
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.school_rounded,
-                      size: 20, color: Colors.white),
-                ),
-                if (!collapsed) ...[
-                  const SizedBox(width: 10),
+                if (collapsed)
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: const BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.school_rounded,
+                        size: 20, color: Colors.white),
+                  )
+                else
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Teacher Panel',
-                          style: AppTextStyles.headlineSmall.copyWith(
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          'Tareshwar Tutorials',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: _inactiveColor,
-                            fontSize: 10,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        height: 34,
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
-                ],
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: onToggle,
                   child: Icon(

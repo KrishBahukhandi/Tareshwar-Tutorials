@@ -190,35 +190,16 @@ class _Logo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          width: 72,
+        // Logo image
+        Image.asset(
+          'assets/images/logo.png',
+          width: 220,
           height: 72,
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.35),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.school_rounded,
-            color: Colors.white,
-            size: 36,
-          ),
+          fit: BoxFit.contain,
         ),
-        const SizedBox(height: 18),
-        Text(
-          AppConstants.appName,
-          style: AppTextStyles.displaySmall,
-        ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 16),
         Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(20),
