@@ -4,7 +4,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import 'auth_service.dart' show currentUserProvider;
-import 'batch_service.dart';
 import 'course_service.dart';
 import 'progress_service.dart';
 import 'test_service.dart';
@@ -24,14 +23,18 @@ final onboardingDoneProvider = StateProvider<bool>((ref) => false);
 //  COURSE PROVIDERS
 // ═══════════════════════════════════════════════════════════════
 
-/// All published courses
-final allCoursesProvider = FutureProvider.autoDispose<List<CourseModel>>((ref) {
+/// All published courses.
+/// Not autoDispose — the course catalogue is shared across all students
+/// and should not be re-fetched every time a student changes tab.
+final allCoursesProvider = FutureProvider<List<CourseModel>>((ref) {
   return ref.watch(courseServiceProvider).fetchCourses(publishedOnly: true);
 });
 
-/// Courses enrolled by current student
+/// Courses enrolled by current student.
+/// Not autoDispose — tab switches must not trigger a new DB round-trip.
+/// Invalidated automatically when currentUserProvider changes (login/logout).
 final enrolledCoursesProvider =
-    FutureProvider.autoDispose<List<CourseModel>>((ref) {
+    FutureProvider<List<CourseModel>>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return Future.value([]);
   return ref.watch(courseServiceProvider).fetchEnrolledCourses(user.id);
@@ -63,6 +66,17 @@ final courseSubjectsProvider =
     FutureProvider.autoDispose.family<List<SubjectModel>, String>(
         (ref, courseId) {
   return ref.watch(courseServiceProvider).fetchSubjectsFlat(courseId);
+});
+
+// ── Enrollment check for current student ─────────────────────
+final isEnrolledInCourseProvider =
+    FutureProvider.autoDispose.family<bool, String>((ref, courseId) {
+  final user = ref.watch(currentUserProvider).valueOrNull;
+  if (user == null) return Future.value(false);
+  return ref.watch(courseServiceProvider).isStudentEnrolled(
+        studentId: user.id,
+        courseId: courseId,
+      );
 });
 
 /// Chapters for a subject
@@ -103,9 +117,10 @@ final studentProgressMapProvider = FutureProvider.autoDispose
 // ═══════════════════════════════════════════════════════════════
 
 /// Full map of all progress rows for the current student.
-/// Re-exported key used across the app.
+/// Not autoDispose — fetching all progress is expensive and must
+/// survive navigation between tabs without re-fetching.
 final currentStudentProgressProvider =
-    FutureProvider.autoDispose<Map<String, LectureProgressModel>>((ref) {
+    FutureProvider<Map<String, LectureProgressModel>>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return Future.value({});
   return ref.watch(progressServiceProvider).fetchAllProgress(user.id);
@@ -141,12 +156,13 @@ final chapterProgressProvider = FutureProvider.autoDispose
 
 /// All course progresses for the current student's enrolled courses.
 /// Returns a map keyed by courseId for O(1) lookup in UI.
+/// Not autoDispose — this is the most expensive computation on the
+/// home screen (was N×4 DB queries, now 4 total). Keep it alive.
 final studentAllCourseProgressProvider =
-    FutureProvider.autoDispose<Map<String, CourseProgress>>((ref) async {
+    FutureProvider<Map<String, CourseProgress>>((ref) async {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return {};
-  final courses =
-      await ref.watch(enrolledCoursesProvider.future);
+  final courses = await ref.watch(enrolledCoursesProvider.future);
   if (courses.isEmpty) return {};
   final progresses = await ref
       .watch(progressServiceProvider)
@@ -158,16 +174,18 @@ final studentAllCourseProgressProvider =
 });
 
 /// Count of courses the current student has completed (100%).
+/// Not autoDispose — derived from studentAllCourseProgressProvider (already cached).
 final completedCoursesCountProvider =
-    FutureProvider.autoDispose<int>((ref) async {
+    FutureProvider<int>((ref) async {
   final progressMap =
       await ref.watch(studentAllCourseProgressProvider.future);
   return progressMap.values.where((p) => p.isComplete).length;
 });
 
 /// Count of courses the current student has started (>0% progress).
+/// Not autoDispose — same reasoning as completedCoursesCountProvider.
 final startedCoursesCountProvider =
-    FutureProvider.autoDispose<int>((ref) async {
+    FutureProvider<int>((ref) async {
   final progressMap =
       await ref.watch(studentAllCourseProgressProvider.future);
   return progressMap.values.where((p) => p.hasStarted).length;
@@ -189,17 +207,19 @@ final chapterTestsProvider =
   return ref.watch(testServiceProvider).fetchTestsByChapter(chapterId);
 });
 
-/// Attempts by current student
+/// Attempts by current student.
+/// Not autoDispose — test history doesn't change between tab switches.
 final studentAttemptsProvider =
-    FutureProvider.autoDispose<List<TestAttemptModel>>((ref) {
+    FutureProvider<List<TestAttemptModel>>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return Future.value([]);
   return ref.watch(testServiceProvider).fetchAttempts(studentId: user.id);
 });
 
-/// Aggregate stats for current student
+/// Aggregate stats for current student.
+/// Not autoDispose — stat aggregation is a heavier query; cache the result.
 final studentTestStatsProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>>((ref) {
+    FutureProvider<Map<String, dynamic>>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return Future.value({'best': 0, 'avg': 0.0, 'total': 0});
   return ref.watch(testServiceProvider).fetchStudentStats(user.id);
@@ -257,9 +277,10 @@ final doubtsProvider =
   return ref.watch(doubtServiceProvider).fetchDoubts(lectureId: lectureId);
 });
 
-/// My doubts for the currently logged-in student
+/// My doubts for the currently logged-in student.
+/// Not autoDispose — doubt list should not be re-fetched on every tab switch.
 final myDoubtsProvider =
-    FutureProvider.autoDispose<List<DoubtModel>>((ref) {
+    FutureProvider<List<DoubtModel>>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return Future.value([]);
   return ref.watch(doubtServiceProvider).fetchDoubts(studentId: user.id);
@@ -296,16 +317,21 @@ final doubtsStreamProvider =
 //  NOTIFICATION PROVIDERS
 // ═══════════════════════════════════════════════════════════════
 
-/// All notifications for current user
+/// All notifications for current user.
+/// Not autoDispose — notification list survives tab navigation.
 final userNotificationsProvider =
-    FutureProvider.autoDispose<List<NotificationModel>>((ref) {
+    FutureProvider<List<NotificationModel>>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return Future.value([]);
   return ref.watch(notificationServiceProvider).fetchNotifications(user.id);
 });
 
-/// Unread notification count (realtime)
-final unreadCountProvider = StreamProvider.autoDispose<int>((ref) {
+/// Unread notification count (polled every 30 s).
+/// Not autoDispose — the badge counter must stay alive across all tabs.
+/// Using a non-realtime poll avoids creating one WebSocket connection
+/// per active student (which would exceed Supabase's concurrent
+/// realtime connection limit well before 5k students).
+final unreadCountProvider = StreamProvider<int>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return Stream.value(0);
   return ref.watch(notificationServiceProvider).unreadCountStream(user.id);
@@ -419,57 +445,18 @@ final testSessionProvider =
     StateNotifierProvider<TestSessionNotifier, TestSessionState>(
         (ref) => TestSessionNotifier());
 
-/// ──────────────────────────────────────────────────────────────
-///  BATCH PROVIDERS
-/// ──────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  ENROLLMENT PROVIDERS
+// ═══════════════════════════════════════════════════════════════
 
-/// All batches (admin / teacher overview)
-final allBatchesProvider =
-    FutureProvider.autoDispose<List<BatchModel>>((ref) =>
-        ref.watch(batchServiceProvider).fetchAllBatches());
-
-/// Batches for a specific course
-final courseBatchesProvider =
-    FutureProvider.autoDispose.family<List<BatchModel>, String>(
-        (ref, courseId) =>
-            ref.watch(batchServiceProvider).fetchAllBatches(courseId: courseId));
-
-/// Batches the current student is enrolled in
-final studentBatchesProvider =
-    FutureProvider.autoDispose.family<List<BatchModel>, String>(
-        (ref, studentId) =>
-            ref.watch(batchServiceProvider).fetchStudentBatches(studentId));
-
-/// Batches assigned to a teacher (via course ownership)
-final teacherBatchesProvider =
-    FutureProvider.autoDispose.family<List<BatchModel>, String>(
-        (ref, teacherId) =>
-            ref.watch(batchServiceProvider).fetchTeacherBatches(teacherId));
-
-/// Single batch by ID
-final batchByIdProvider =
-    FutureProvider.autoDispose.family<BatchModel?, String>(
-        (ref, batchId) =>
-            ref.watch(batchServiceProvider).fetchBatchById(batchId));
-
-/// Enrollments for a batch (for teacher / admin)
-final batchEnrollmentsProvider =
+/// All enrollments for a course (admin / teacher)
+final courseEnrollmentsProvider =
     FutureProvider.autoDispose.family<List<EnrollmentModel>, String>(
-        (ref, batchId) =>
-            ref.watch(batchServiceProvider).fetchBatchEnrollments(batchId));
+        (ref, courseId) =>
+            ref.watch(courseServiceProvider).fetchCourseEnrollments(courseId));
 
 /// All enrollments for a student
 final studentEnrollmentsProvider =
     FutureProvider.autoDispose.family<List<EnrollmentModel>, String>(
         (ref, studentId) =>
-            ref.watch(batchServiceProvider).fetchStudentEnrollments(studentId));
-
-/// Check if student is enrolled in a specific batch
-typedef _EnrollCheckKey = ({String studentId, String batchId});
-
-final isEnrolledInBatchProvider =
-    FutureProvider.autoDispose.family<bool, _EnrollCheckKey>(
-        (ref, key) => ref.watch(batchServiceProvider).isStudentEnrolledInBatch(
-              studentId: key.studentId,
-              batchId: key.batchId,
-            ));
+            ref.watch(courseServiceProvider).fetchStudentEnrollments(studentId));

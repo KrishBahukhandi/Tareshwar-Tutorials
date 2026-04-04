@@ -78,28 +78,27 @@ class NotificationService {
     });
   }
 
-  // ── Send announcement to all students in a batch ─────────
-  Future<void> sendBatchAnnouncement({
-    required String batchId,
+  // ── Send announcement to all students enrolled in a course ─
+  Future<void> sendCourseAnnouncement({
+    required String courseId,
     required String title,
     required String body,
   }) async {
-    // Fetch all student IDs in this batch
     final members = await _client
         .from('enrollments')
         .select('student_id')
-        .eq('batch_id', batchId);
+        .eq('course_id', courseId);
 
     final inserts = members
         .map(
           (m) => {
-            'user_id': m['student_id'],
-            'title': title,
-            'body': body,
-            'type': 'announcement',
-            'reference_id': batchId,
-            'is_read': false,
-            'created_at': DateTime.now().toIso8601String(),
+            'user_id':      m['student_id'],
+            'title':        title,
+            'body':         body,
+            'type':         'announcement',
+            'reference_id': courseId,
+            'is_read':      false,
+            'created_at':   DateTime.now().toIso8601String(),
           },
         )
         .toList();
@@ -109,12 +108,27 @@ class NotificationService {
     }
   }
 
-  // ── Realtime: unread count stream ─────────────────────────
-  Stream<int> unreadCountStream(String userId) {
-    return _client
-        .from('notifications')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', userId)
-        .map((list) => list.where((n) => n['is_read'] == false).length);
+  // ── Polled unread count stream ────────────────────────────
+  // The previous realtime `.stream()` implementation created
+  // one persistent WebSocket subscription per active student.
+  // Supabase free tier allows 200 concurrent realtime
+  // connections — at 5k students this limit is hit immediately.
+  //
+  // Polling every 30 s uses plain HTTP (no WebSocket quota)
+  // and is accurate enough for a badge counter.
+  Stream<int> unreadCountStream(String userId) async* {
+    while (true) {
+      try {
+        final response = await _client
+            .from('notifications')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('is_read', false);
+        yield (response as List).length;
+      } catch (_) {
+        yield 0;
+      }
+      await Future.delayed(const Duration(seconds: 30));
+    }
   }
 }

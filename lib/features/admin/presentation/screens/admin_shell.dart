@@ -17,7 +17,6 @@ import '../../../../features/admin_users/screens/admin_students_screen.dart'
 import '../../../../features/admin_users/screens/admin_teachers_screen.dart'
     as admin_users_teachers show AdminTeachersScreen;
 import '../../../../features/admin_courses/screens/admin_course_list_screen.dart';
-import '../../../../features/admin_batches/screens/batch_list_screen.dart';
 import '../../../../features/admin_payments/screens/payments_dashboard_screen.dart';
 import '../../../../features/admin_notifications/screens/announcement_list_screen.dart';
 import 'admin_settings_screen.dart';
@@ -132,7 +131,6 @@ class _AdminContent extends ConsumerWidget {
       case AdminSection.students:       return const admin_users.AdminStudentsScreen();
       case AdminSection.teachers:       return const admin_users_teachers.AdminTeachersScreen();
       case AdminSection.courses:        return const AdminCourseListScreen();
-      case AdminSection.batches:        return const BatchListScreen();
       case AdminSection.liveClasses:    return const AdminLiveClassesScreen();
       case AdminSection.payments:       return const PaymentsDashboardScreen();
       case AdminSection.announcements:  return const AnnouncementListScreen();

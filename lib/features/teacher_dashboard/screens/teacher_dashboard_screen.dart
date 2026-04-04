@@ -15,7 +15,6 @@ import '../providers/teacher_dashboard_providers.dart';
 import '../widgets/teacher_sidebar.dart';
 import 'teacher_overview_screen.dart';
 import 'teacher_courses_screen.dart';
-import 'teacher_batches_screen.dart';
 import '../../teacher_analytics/screens/teacher_analytics_screen.dart'
     as full_analytics;
 import 'teacher_doubts_screen.dart';
@@ -138,8 +137,6 @@ class _ContentArea extends StatelessWidget {
         return const TeacherOverviewScreen();
       case TeacherSection.myCourses:
         return const TeacherCoursesScreen();
-      case TeacherSection.batches:
-        return const TeacherBatchesScreen();
       case TeacherSection.liveClasses:
         return const TeacherLiveClassesScreen();
       case TeacherSection.uploadContent:

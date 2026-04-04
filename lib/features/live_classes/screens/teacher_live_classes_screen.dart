@@ -186,7 +186,7 @@ class TeacherLiveClassesScreen extends ConsumerWidget {
     try {
       await ref.read(liveClassServiceProvider).sendLiveClassNotification(
             liveClassId: lc.id,
-            batchId: lc.batchId,
+            courseId: lc.courseId,
             title: lc.title,
             startTime: lc.startTime,
           );
@@ -349,10 +349,10 @@ class _TeacherLiveClassCard extends StatelessWidget {
                     _Meta(
                         icon: Icons.timer_outlined,
                         text: '${lc.durationMinutes} min'),
-                    if (lc.batchName != null)
+                    if (lc.courseName != null)
                       _Meta(
-                          icon: Icons.group_work_rounded,
-                          text: lc.batchName!),
+                          icon: Icons.menu_book_rounded,
+                          text: lc.courseName!),
                   ],
                 ),
 

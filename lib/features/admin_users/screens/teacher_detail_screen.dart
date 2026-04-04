@@ -466,15 +466,6 @@ class _StatsRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: StatChip(
-            label: 'Batches',
-            value: '${detail.totalBatches}',
-            icon: Icons.groups_rounded,
-            color: AppColors.primary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: StatChip(
             label: 'Students',
             value: '${detail.totalStudents}',
             icon: Icons.people_alt_rounded,

@@ -27,7 +27,6 @@ class TeacherSidebar extends ConsumerWidget {
   static const _navItems = <({TeacherSection section, IconData icon})>[
     (section: TeacherSection.overview,      icon: Icons.dashboard_rounded),
     (section: TeacherSection.myCourses,     icon: Icons.menu_book_rounded),
-    (section: TeacherSection.batches,       icon: Icons.group_work_rounded),
     (section: TeacherSection.liveClasses,   icon: Icons.video_camera_front_rounded),
     (section: TeacherSection.uploadContent, icon: Icons.upload_file_rounded),
     (section: TeacherSection.createTest,    icon: Icons.quiz_rounded),
@@ -59,7 +58,8 @@ class TeacherSidebar extends ConsumerWidget {
         children: [
           // ── Logo / Brand + collapse toggle ───────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 20, 12, 14),
+            padding: EdgeInsets.fromLTRB(
+                collapsed ? 5 : 12, 20, collapsed ? 5 : 12, 14),
             child: Row(
               children: [
                 if (collapsed)
@@ -89,7 +89,7 @@ class TeacherSidebar extends ConsumerWidget {
                       ),
                     ),
                   ),
-                const SizedBox(width: 8),
+                if (!collapsed) const SizedBox(width: 8),
                 GestureDetector(
                   onTap: onToggle,
                   child: Icon(

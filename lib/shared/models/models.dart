@@ -70,6 +70,9 @@ class UserModel {
 }
 
 // ── CourseModel ───────────────────────────────────────────────
+/// A course is now the single enrollment unit.
+/// It carries capacity, timeline, class level, and subjects overview
+/// (fields previously split across Course + Batch).
 class CourseModel {
   final String id;
   final String title;
@@ -80,8 +83,19 @@ class CourseModel {
   final String? thumbnailUrl;
   final String? categoryTag;
   final bool isPublished;
+  final bool isActive;
+
+  // ── New fields (merged from Batch) ───────────────────────
+  final String? classLevel;          // 'Class 8' … 'Class 12'
+  final int maxStudents;             // seat capacity
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final List<String> subjectsOverview; // e.g. ['Physics','Chemistry']
+  final int enrolledCount;           // auto-maintained by DB trigger
+
+  // ── Computed stats ────────────────────────────────────────
   final int? totalLectures;
-  final int? totalStudents;
+  final int? totalStudents;          // alias for enrolledCount
   final double? rating;
   final DateTime createdAt;
 
@@ -94,12 +108,24 @@ class CourseModel {
     required this.price,
     this.thumbnailUrl,
     this.categoryTag,
-    this.isPublished = true,
+    this.isPublished = false,
+    this.isActive = true,
+    this.classLevel,
+    this.maxStudents = 50,
+    this.startDate,
+    this.endDate,
+    this.subjectsOverview = const [],
+    this.enrolledCount = 0,
     this.totalLectures,
     this.totalStudents,
     this.rating,
     required this.createdAt,
   });
+
+  double get fillPercent =>
+      maxStudents > 0 ? (enrolledCount / maxStudents).clamp(0.0, 1.0) : 0.0;
+
+  bool get isFull => enrolledCount >= maxStudents;
 
   factory CourseModel.fromJson(Map<String, dynamic> json) => CourseModel(
         id: json['id'] as String,
@@ -110,9 +136,23 @@ class CourseModel {
         price: (json['price'] as num).toDouble(),
         thumbnailUrl: json['thumbnail_url'] as String?,
         categoryTag: json['category_tag'] as String?,
-        isPublished: json['is_published'] as bool? ?? true,
+        isPublished: json['is_published'] as bool? ?? false,
+        isActive: json['is_active'] as bool? ?? true,
+        classLevel: json['class_level'] as String?,
+        maxStudents: json['max_students'] as int? ?? 50,
+        startDate: json['start_date'] != null
+            ? DateTime.tryParse(json['start_date'] as String)
+            : null,
+        endDate: json['end_date'] != null
+            ? DateTime.tryParse(json['end_date'] as String)
+            : null,
+        subjectsOverview: (json['subjects_overview'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            [],
+        enrolledCount: (json['enrolled_count'] ?? json['total_students']) as int? ?? 0,
         totalLectures: json['total_lectures'] as int?,
-        totalStudents: json['total_students'] as int?,
+        totalStudents: (json['total_students'] ?? json['enrolled_count']) as int?,
         rating: (json['rating'] as num?)?.toDouble(),
         createdAt: DateTime.parse(json['created_at'] as String),
       );
@@ -126,6 +166,12 @@ class CourseModel {
         'thumbnail_url': thumbnailUrl,
         'category_tag': categoryTag,
         'is_published': isPublished,
+        'is_active': isActive,
+        'class_level': classLevel,
+        'max_students': maxStudents,
+        'start_date': startDate?.toIso8601String().substring(0, 10),
+        'end_date': endDate?.toIso8601String().substring(0, 10),
+        'subjects_overview': subjectsOverview,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -136,6 +182,12 @@ class CourseModel {
     String? thumbnailUrl,
     String? categoryTag,
     bool? isPublished,
+    bool? isActive,
+    String? classLevel,
+    int? maxStudents,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? subjectsOverview,
   }) =>
       CourseModel(
         id: id,
@@ -147,6 +199,13 @@ class CourseModel {
         thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
         categoryTag: categoryTag ?? this.categoryTag,
         isPublished: isPublished ?? this.isPublished,
+        isActive: isActive ?? this.isActive,
+        classLevel: classLevel ?? this.classLevel,
+        maxStudents: maxStudents ?? this.maxStudents,
+        startDate: startDate ?? this.startDate,
+        endDate: endDate ?? this.endDate,
+        subjectsOverview: subjectsOverview ?? this.subjectsOverview,
+        enrolledCount: enrolledCount,
         totalLectures: totalLectures,
         totalStudents: totalStudents,
         rating: rating,
@@ -154,111 +213,13 @@ class CourseModel {
       );
 }
 
-// ── BatchModel ────────────────────────────────────────────────
-/// A cohort/batch under a Course.
-/// Students enroll into batches — not directly into courses.
-class BatchModel {
-  final String id;
-  final String courseId;
-  final String? courseTitle;   // populated via join
-  final String? teacherName;   // populated via join
-  final String batchName;
-  final String? description;
-  final DateTime startDate;
-  final DateTime? endDate;
-  final int maxStudents;
-  final int enrolledCount;     // populated client-side
-  final bool isActive;
-  final DateTime createdAt;
-
-  const BatchModel({
-    required this.id,
-    required this.courseId,
-    this.courseTitle,
-    this.teacherName,
-    required this.batchName,
-    this.description,
-    required this.startDate,
-    this.endDate,
-    this.maxStudents = 50,
-    this.enrolledCount = 0,
-    this.isActive = true,
-    required this.createdAt,
-  });
-
-  double get fillPercent =>
-      maxStudents > 0 ? (enrolledCount / maxStudents).clamp(0.0, 1.0) : 0.0;
-
-  bool get isFull => enrolledCount >= maxStudents;
-
-  factory BatchModel.fromJson(Map<String, dynamic> json) {
-    // Support joined course data: courses!course_id(title, users!teacher_id(name))
-    final courseMap  = json['courses'] as Map?;
-    final teacherMap = courseMap?['users'] as Map?;
-    return BatchModel(
-      id: json['id'] as String,
-      courseId: json['course_id'] as String,
-      courseTitle: (json['course_title'] ?? courseMap?['title']) as String?,
-      teacherName: (json['teacher_name'] ?? teacherMap?['name']) as String?,
-      batchName: (json['batch_name'] ?? json['name']) as String,
-      description: json['description'] as String?,
-      startDate: DateTime.parse(json['start_date'] as String),
-      endDate: json['end_date'] != null
-          ? DateTime.parse(json['end_date'] as String)
-          : null,
-      maxStudents: json['max_students'] as int? ?? 50,
-      enrolledCount: json['enrolled_count'] as int? ?? 0,
-      isActive: json['is_active'] as bool? ?? true,
-      createdAt: DateTime.parse(
-          json['created_at'] as String? ?? DateTime.now().toIso8601String()),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'course_id': courseId,
-        'batch_name': batchName,
-        'description': description,
-        'start_date': startDate.toIso8601String().substring(0, 10),
-        'end_date': endDate?.toIso8601String().substring(0, 10),
-        'max_students': maxStudents,
-        'is_active': isActive,
-      };
-
-  BatchModel copyWith({
-    String? batchName,
-    String? description,
-    DateTime? startDate,
-    DateTime? endDate,
-    int? maxStudents,
-    int? enrolledCount,
-    bool? isActive,
-    String? courseTitle,
-  }) =>
-      BatchModel(
-        id: id,
-        courseId: courseId,
-        courseTitle: courseTitle ?? this.courseTitle,
-        teacherName: teacherName,
-        batchName: batchName ?? this.batchName,
-        description: description ?? this.description,
-        startDate: startDate ?? this.startDate,
-        endDate: endDate ?? this.endDate,
-        maxStudents: maxStudents ?? this.maxStudents,
-        enrolledCount: enrolledCount ?? this.enrolledCount,
-        isActive: isActive ?? this.isActive,
-        createdAt: createdAt,
-      );
-}
-
 // ── EnrollmentModel ───────────────────────────────────────────
-/// Students enroll in batches; this joins to course via batch.
+/// Students enroll directly into a Course (no batch intermediary).
 class EnrollmentModel {
   final String id;
   final String studentId;
   final String? studentName;  // populated via join
-  final String batchId;
-  final String? batchName;    // populated via join
+  final String courseId;
   final String? courseTitle;  // populated via join
   final DateTime enrolledAt;
   final double progressPercent;
@@ -267,23 +228,20 @@ class EnrollmentModel {
     required this.id,
     required this.studentId,
     this.studentName,
-    required this.batchId,
-    this.batchName,
+    required this.courseId,
     this.courseTitle,
     required this.enrolledAt,
     this.progressPercent = 0.0,
   });
 
   factory EnrollmentModel.fromJson(Map<String, dynamic> json) {
-    final batchMap  = json['batches'] as Map?;
-    final courseMap = batchMap?['courses'] as Map?;
-    final userMap   = json['users'] as Map?;
+    final courseMap = json['courses'] as Map?;
+    final userMap   = json['users']   as Map?;
     return EnrollmentModel(
       id: json['id'] as String,
       studentId: json['student_id'] as String,
       studentName: (json['student_name'] ?? userMap?['name']) as String?,
-      batchId: json['batch_id'] as String,
-      batchName: (json['batch_name'] ?? batchMap?['batch_name']) as String?,
+      courseId: json['course_id'] as String,
       courseTitle: (json['course_title'] ?? courseMap?['title']) as String?,
       enrolledAt: DateTime.parse(
           json['enrolled_at'] as String? ?? DateTime.now().toIso8601String()),
@@ -295,19 +253,17 @@ class EnrollmentModel {
   Map<String, dynamic> toJson() => {
         'id': id,
         'student_id': studentId,
-        'batch_id': batchId,
+        'course_id': courseId,
         'enrolled_at': enrolledAt.toIso8601String(),
         'progress_percent': progressPercent,
       };
 }
 
 // ── SubjectModel ──────────────────────────────────────────────
-/// A subject belongs to a batch (not directly to a course).
-/// The hierarchy: Course → Batch → Subject → Chapter → Lecture
+/// Hierarchy: Course → Subject → Chapter → Lecture
 class SubjectModel {
   final String id;
   final String courseId;
-  final String? batchId;   // nullable for backwards compat
   final String name;
   final int sortOrder;
   final List<ChapterModel> chapters;
@@ -315,7 +271,6 @@ class SubjectModel {
   const SubjectModel({
     required this.id,
     required this.courseId,
-    this.batchId,
     required this.name,
     this.sortOrder = 0,
     this.chapters = const [],
@@ -324,7 +279,6 @@ class SubjectModel {
   factory SubjectModel.fromJson(Map<String, dynamic> json) => SubjectModel(
         id: json['id'] as String,
         courseId: json['course_id'] as String,
-        batchId: json['batch_id'] as String?,
         name: json['name'] as String,
         sortOrder: json['sort_order'] as int? ?? 0,
         chapters: (json['chapters'] as List<dynamic>?)
@@ -341,7 +295,6 @@ class SubjectModel {
       SubjectModel(
         id: id,
         courseId: courseId,
-        batchId: batchId,
         name: name ?? this.name,
         sortOrder: sortOrder ?? this.sortOrder,
         chapters: chapters ?? this.chapters,
@@ -923,13 +876,13 @@ class PaymentModel {
 }
 
 // ── AnnouncementModel ─────────────────────────────────────────
-/// Platform-wide or batch-scoped announcements posted by admin/teacher.
+/// Platform-wide or course-scoped announcements posted by admin/teacher.
 class AnnouncementModel {
   final String id;
   final String authorId;
   final String? authorName;
-  final String? batchId;       // null = platform-wide
-  final String? batchName;
+  final String? courseId;      // null = platform-wide
+  final String? courseTitle;   // populated via join
   final String title;
   final String body;
   final DateTime createdAt;
@@ -938,26 +891,24 @@ class AnnouncementModel {
     required this.id,
     required this.authorId,
     this.authorName,
-    this.batchId,
-    this.batchName,
+    this.courseId,
+    this.courseTitle,
     required this.title,
     required this.body,
     required this.createdAt,
   });
 
-  bool get isPlatformWide => batchId == null;
+  bool get isPlatformWide => courseId == null;
 
   factory AnnouncementModel.fromJson(Map<String, dynamic> json) {
-    final userMap  = json['users'] as Map?;
-    final batchMap = json['batches'] as Map?;
+    final userMap   = json['users']   as Map?;
+    final courseMap = json['courses'] as Map?;
     return AnnouncementModel(
       id: json['id'] as String,
       authorId: json['author_id'] as String,
-      authorName:
-          (json['author_name'] ?? userMap?['name']) as String?,
-      batchId: json['batch_id'] as String?,
-      batchName:
-          (json['batch_name'] ?? batchMap?['batch_name']) as String?,
+      authorName: (json['author_name'] ?? userMap?['name']) as String?,
+      courseId: json['course_id'] as String?,
+      courseTitle: (json['course_title'] ?? courseMap?['title']) as String?,
       title: json['title'] as String,
       body: json['body'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -967,7 +918,7 @@ class AnnouncementModel {
   Map<String, dynamic> toJson() => {
         'id': id,
         'author_id': authorId,
-        'batch_id': batchId,
+        'course_id': courseId,
         'title': title,
         'body': body,
         'created_at': createdAt.toIso8601String(),

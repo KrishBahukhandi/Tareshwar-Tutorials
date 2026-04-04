@@ -69,15 +69,7 @@ import '../../features/admin_courses/screens/admin_edit_course_screen.dart';
 import '../../features/admin_courses/screens/admin_course_detail_screen.dart';
 import '../../features/admin_courses/data/admin_courses_service.dart'
     show AdminCourseListItem;
-import '../../features/admin_batches/screens/create_batch_screen.dart';
-import '../../features/admin_batches/screens/edit_batch_screen.dart';
-import '../../features/admin_batches/screens/batch_detail_screen.dart';
-import '../../features/admin_batches/screens/batch_students_screen.dart';
-import '../../features/admin_batches/data/admin_batches_service.dart'
-    show AdminBatchListItem;
 import '../../features/admin_notifications/screens/create_announcement_screen.dart';
-import '../../features/courses/presentation/screens/student_batches_screen.dart';
-import '../../features/teacher_dashboard/screens/teacher_batches_screen.dart';
 import '../../features/live_classes/screens/live_class_list_screen.dart';
 import '../../features/live_classes/screens/live_class_detail_screen.dart';
 import '../../features/downloads/presentation/screens/downloads_screen.dart';
@@ -200,9 +192,6 @@ class AppRoutes {
   static const String adminStudents = '/admin/students';
   static const String adminTeachers = '/admin/teachers';
   static const String adminCourses = '/admin/courses';
-  static const String batchManagement = '/admin/batches';
-  static const String adminBatchEnrollments =
-      '/admin/batches/:batchId/enrollments';
   static const String adminPayments = '/admin/payments';
   static const String adminTransactions = '/admin/payments/transactions';
   static const String adminRevenueAnalytics = '/admin/payments/analytics';
@@ -230,23 +219,6 @@ class AppRoutes {
   static String adminEditCoursePath(String courseId) =>
       '/admin/courses/$courseId/edit';
 
-  // ── Admin: Batch management (new modular screens) ─────────
-  static const String adminCreateBatch = '/admin/batches/create';
-  static const String adminBatchDetail = '/admin/batches/:batchId';
-  static const String adminEditBatch = '/admin/batches/:batchId/edit';
-  static const String adminBatchStudents = '/admin/batches/:batchId/students';
-
-  static String adminCreateBatchPath({String? courseId}) =>
-      '/admin/batches/create${courseId != null ? '?courseId=${Uri.encodeComponent(courseId)}' : ''}';
-  static String adminBatchDetailPath(String batchId) =>
-      '/admin/batches/$batchId';
-  static String adminEditBatchPath(String batchId) =>
-      '/admin/batches/$batchId/edit';
-  static String adminBatchStudentsPath(String batchId) =>
-      '/admin/batches/$batchId/students';
-
-  static String adminBatchEnrollmentsPath(String batchId) =>
-      '/admin/batches/$batchId/enrollments';
   static String adminPaymentsPath() => '/admin/payments';
   static String adminTransactionsPath() => '/admin/payments/transactions';
   static String adminRevenueAnalyticsPath() => '/admin/payments/analytics';
@@ -262,10 +234,6 @@ class AppRoutes {
   static String downloadedPlayerPath(String id) =>
       '/student/downloads/$id/play';
 
-  // ── Student batches ───────────────────────────────────────
-  static const String studentBatches = '/student/my-batches';
-  static String studentBatchesPath() => '/student/my-batches';
-
   // ── Live Classes ──────────────────────────────────────────
   static const String liveClasses = '/student/live-classes';
   static const String liveClassDetail = '/student/live-classes/:liveClassId';
@@ -273,9 +241,6 @@ class AppRoutes {
   static String liveClassesPath() => '/student/live-classes';
   static String liveClassDetailPath(String id) => '/student/live-classes/$id';
 
-  // ── Teacher batches ───────────────────────────────────────
-  static const String teacherBatches = '/teacher/batches';
-  static String teacherBatchesPath() => '/teacher/batches';
 
   // ── Path helpers ──────────────────────────────────────────
   static String courseDetailPath(String id) => '/student/course/$id';
@@ -803,36 +768,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: AppRoutes.batchManagement,
-        builder: (context, state) =>
-            _AdminShellSection(section: AdminSection.batches),
-      ),
-
-      // ── Admin: Batch management (full-page screens) ────────
-      GoRoute(
-        path: AppRoutes.adminCreateBatch,
-        builder: (context, state) => CreateBatchScreen(
-          preselectedCourseId: state.uri.queryParameters['courseId'],
-        ),
-      ),
-      GoRoute(
-        path: AppRoutes.adminBatchDetail,
-        builder: (context, state) =>
-            BatchDetailScreen(batchId: state.pathParameters['batchId']!),
-      ),
-      GoRoute(
-        path: AppRoutes.adminEditBatch,
-        builder: (context, state) => EditBatchScreen(
-          batchId: state.pathParameters['batchId']!,
-          existing: state.extra as AdminBatchListItem?,
-        ),
-      ),
-      GoRoute(
-        path: AppRoutes.adminBatchStudents,
-        builder: (context, state) =>
-            BatchStudentsScreen(batchId: state.pathParameters['batchId']!),
-      ),
-      GoRoute(
         path: AppRoutes.adminPayments,
         redirect: (context, state) => AppRoutes.adminDashboard,
       ),
@@ -878,12 +813,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             TeacherDetailScreen(userId: state.pathParameters['userId']!),
       ),
 
-      // ── Student: My Batches ────────────────────────────────
-      GoRoute(
-        path: AppRoutes.studentBatches,
-        builder: (context, state) => const StudentBatchesScreen(),
-      ),
-
       // ── Student: Live Classes ──────────────────────────────
       GoRoute(
         path: AppRoutes.liveClasses,
@@ -905,11 +834,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
 
-      // ── Teacher: Batch Management ──────────────────────────
-      GoRoute(
-        path: AppRoutes.teacherBatches,
-        builder: (context, state) => const TeacherBatchesScreen(),
-      ),
     ],
 
     errorBuilder: (context, state) =>

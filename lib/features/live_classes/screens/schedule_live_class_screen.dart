@@ -6,8 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/services/auth_service.dart';
-import '../../../../shared/services/app_providers.dart';
 import '../../../../shared/models/models.dart';
+import '../../../../features/teacher_courses/providers/teacher_course_providers.dart'
+    show myCoursesProvider;
 import '../data/live_class_model.dart';
 import '../data/live_class_service.dart';
 
@@ -33,7 +34,7 @@ class _ScheduleLiveClassScreenState
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
-  String? _selectedBatchId;
+  String? _selectedCourseId;
   bool _saving = false;
   bool _notifSent = false;
 
@@ -49,9 +50,9 @@ class _ScheduleLiveClassScreenState
     _durationCtrl = TextEditingController(
         text: e != null ? e.durationMinutes.toString() : '60');
     if (e != null) {
-      _selectedDate = e.startTime;
-      _selectedTime = TimeOfDay.fromDateTime(e.startTime);
-      _selectedBatchId = e.batchId;
+      _selectedDate     = e.startTime;
+      _selectedTime     = TimeOfDay.fromDateTime(e.startTime);
+      _selectedCourseId = e.courseId;
     }
   }
 
@@ -110,8 +111,8 @@ class _ScheduleLiveClassScreenState
   // ── Save ──────────────────────────────────────────────────
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedBatchId == null) {
-      _showError('Please select a batch');
+    if (_selectedCourseId == null) {
+      _showError('Please select a course');
       return;
     }
     if (_combinedDateTime == null) {
@@ -140,7 +141,7 @@ class _ScheduleLiveClassScreenState
         _showSuccess('Live class updated!');
       } else {
         final created = await svc.scheduleLiveClass(
-          batchId: _selectedBatchId!,
+          courseId: _selectedCourseId!,
           teacherId: uid,
           title: _titleCtrl.text.trim(),
           description: _descCtrl.text.trim().isEmpty
@@ -151,11 +152,10 @@ class _ScheduleLiveClassScreenState
           durationMinutes: int.tryParse(_durationCtrl.text) ?? 60,
         );
 
-        // Optionally send notification immediately
         if (_notifSent) {
           await svc.sendLiveClassNotification(
             liveClassId: created.id,
-            batchId: _selectedBatchId!,
+            courseId: _selectedCourseId!,
             title: _titleCtrl.text.trim(),
             startTime: _combinedDateTime!,
           );
@@ -171,30 +171,25 @@ class _ScheduleLiveClassScreenState
     }
   }
 
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+  void _showError(String msg) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.error,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
 
-  void _showSuccess(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+  void _showSuccess(String msg) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
-    final uid = ref.watch(authServiceProvider).currentAuthUser?.id;
-    final batchesAsync = ref.watch(teacherBatchesProvider(uid ?? ''));
+    final coursesAsync = ref.watch(myCoursesProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4FB),
@@ -258,17 +253,15 @@ class _ScheduleLiveClassScreenState
             ),
             const SizedBox(height: 20),
 
-            // ── Batch selector ────────────────────────────
-            _SectionLabel('Batch'),
-            batchesAsync.when(
+            // ── Course selector ───────────────────────────
+            _SectionLabel('Course'),
+            coursesAsync.when(
               loading: () => const _LoadingBox(),
-              error: (error, stack) =>
-                  const Text('Failed to load batches'),
-              data: (batches) => _BatchDropdown(
-                batches: batches,
-                selectedId: _selectedBatchId,
-                onChanged: (id) =>
-                    setState(() => _selectedBatchId = id),
+              error: (error, _) => const Text('Failed to load courses'),
+              data: (courses) => _CourseDropdown(
+                courses: courses,
+                selectedId: _selectedCourseId,
+                onChanged: (id) => setState(() => _selectedCourseId = id),
               ),
             ),
             const SizedBox(height: 20),
@@ -309,9 +302,7 @@ class _ScheduleLiveClassScreenState
               maxLines: 1,
               validator: (v) {
                 final n = int.tryParse(v ?? '');
-                if (n == null || n <= 0) {
-                  return 'Enter a valid duration';
-                }
+                if (n == null || n <= 0) return 'Enter a valid duration';
                 return null;
               },
             ),
@@ -325,12 +316,8 @@ class _ScheduleLiveClassScreenState
               keyboardType: TextInputType.url,
               maxLines: 1,
               validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Meeting link is required';
-                }
-                if (!v.trim().startsWith('http')) {
-                  return 'Enter a valid URL';
-                }
+                if (v == null || v.trim().isEmpty) return 'Meeting link is required';
+                if (!v.trim().startsWith('http')) return 'Enter a valid URL';
                 return null;
               },
             ),
@@ -339,8 +326,7 @@ class _ScheduleLiveClassScreenState
             // ── Notify students toggle ─────────────────────
             if (!_isEdit)
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
@@ -349,19 +335,21 @@ class _ScheduleLiveClassScreenState
                   contentPadding: EdgeInsets.zero,
                   title: const Text(
                     'Notify students immediately',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: const Text(
-                    'Send push notification to all batch students',
+                    'Send push notification to all enrolled students',
                     style: TextStyle(fontSize: 12),
                   ),
                   value: _notifSent,
                   activeThumbColor: Colors.white,
                   activeTrackColor: AppColors.primary,
                   thumbColor: WidgetStateProperty.resolveWith<Color?>(
-                    (states) => states.contains(WidgetState.selected) ? Colors.white : null,
-                  ),                  onChanged: (v) => setState(() => _notifSent = v),
+                    (states) => states.contains(WidgetState.selected)
+                        ? Colors.white
+                        : null,
+                  ),
+                  onChanged: (v) => setState(() => _notifSent = v),
                 ),
               ),
             const SizedBox(height: 32),
@@ -447,12 +435,11 @@ class _Field extends StatelessWidget {
         validator: validator,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(
-              color: AppColors.textHint, fontSize: 14),
+          hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -463,20 +450,19 @@ class _Field extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide:
-                const BorderSide(color: AppColors.primary, width: 1.5),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
           ),
         ),
       );
 }
 
-class _BatchDropdown extends StatelessWidget {
-  final List<BatchModel> batches;
+class _CourseDropdown extends StatelessWidget {
+  final List<CourseModel> courses;
   final String? selectedId;
   final ValueChanged<String?> onChanged;
 
-  const _BatchDropdown({
-    required this.batches,
+  const _CourseDropdown({
+    required this.courses,
     required this.selectedId,
     required this.onChanged,
   });
@@ -493,12 +479,17 @@ class _BatchDropdown extends StatelessWidget {
           child: DropdownButton<String>(
             isExpanded: true,
             value: selectedId,
-            hint: const Text('Select batch',
+            hint: const Text('Select course',
                 style: TextStyle(color: AppColors.textHint)),
-            items: batches
-                .map((b) => DropdownMenuItem(
-                      value: b.id,
-                      child: Text(b.batchName),
+            items: courses
+                .map((c) => DropdownMenuItem(
+                      value: c.id,
+                      child: Text(
+                        c.classLevel != null
+                            ? '${c.classLevel} · ${c.title}'
+                            : c.title,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ))
                 .toList(),
             onChanged: onChanged,

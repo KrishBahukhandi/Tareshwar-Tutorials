@@ -15,7 +15,6 @@ import '../../../shared/services/doubt_service.dart';
 enum TeacherSection {
   overview,
   myCourses,
-  batches,
   liveClasses,
   uploadContent,
   createTest,
@@ -29,7 +28,6 @@ extension TeacherSectionExt on TeacherSection {
     switch (this) {
       case TeacherSection.overview:       return 'Dashboard';
       case TeacherSection.myCourses:      return 'My Courses';
-      case TeacherSection.batches:        return 'Batches';
       case TeacherSection.liveClasses:    return 'Live Classes';
       case TeacherSection.uploadContent:  return 'Upload Content';
       case TeacherSection.createTest:     return 'Create Test';

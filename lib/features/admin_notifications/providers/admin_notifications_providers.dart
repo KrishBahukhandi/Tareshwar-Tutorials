@@ -7,29 +7,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/admin_notifications_service.dart';
 
 export '../data/admin_notifications_service.dart'
-    show AnnouncementRow, BatchPickerRow, AnnouncementStats;
+    show AnnouncementRow, CoursePickerRow, AnnouncementStats;
 
 // ─────────────────────────────────────────────────────────────
 //  Filter state
 // ─────────────────────────────────────────────────────────────
 class AnnouncementFilter {
-  final String? batchId;
+  final String? courseId;
   final String? search;
   final bool?   platformWideOnly;
 
   const AnnouncementFilter({
-    this.batchId,
+    this.courseId,
     this.search,
     this.platformWideOnly,
   });
 
   AnnouncementFilter copyWith({
-    Object? batchId          = _sentinel,
+    Object? courseId         = _sentinel,
     Object? search           = _sentinel,
     Object? platformWideOnly = _sentinel,
   }) =>
       AnnouncementFilter(
-        batchId:          batchId          == _sentinel ? this.batchId          : batchId as String?,
+        courseId:         courseId         == _sentinel ? this.courseId         : courseId as String?,
         search:           search           == _sentinel ? this.search           : search as String?,
         platformWideOnly: platformWideOnly == _sentinel ? this.platformWideOnly : platformWideOnly as bool?,
       );
@@ -37,7 +37,7 @@ class AnnouncementFilter {
   static const _sentinel = Object();
 
   bool get hasActiveFilter =>
-      batchId != null || (search?.isNotEmpty ?? false) || platformWideOnly != null;
+      courseId != null || (search?.isNotEmpty ?? false) || platformWideOnly != null;
 }
 
 final announcementFilterProvider =
@@ -51,8 +51,8 @@ final announcementsListProvider =
   final svc    = ref.watch(adminNotificationsServiceProvider);
   final filter = ref.watch(announcementFilterProvider);
   return svc.fetchAnnouncements(
-    batchId:         filter.batchId,
-    search:          filter.search,
+    courseId:         filter.courseId,
+    search:           filter.search,
     platformWideOnly: filter.platformWideOnly,
   );
 });
@@ -66,11 +66,11 @@ final announcementStatsProvider =
 });
 
 // ─────────────────────────────────────────────────────────────
-//  Batch picker
+//  Course picker
 // ─────────────────────────────────────────────────────────────
-final batchPickerProvider =
-    FutureProvider.autoDispose<List<BatchPickerRow>>((ref) {
-  return ref.watch(adminNotificationsServiceProvider).fetchBatches();
+final coursePickerProvider =
+    FutureProvider.autoDispose<List<CoursePickerRow>>((ref) {
+  return ref.watch(adminNotificationsServiceProvider).fetchCourses();
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ class CreateAnnouncementNotifier extends AsyncNotifier<void> {
     required String authorId,
     required String title,
     required String body,
-    String?         batchId,
+    String?         courseId,
     bool            sendPush = true,
   }) async {
     state = const AsyncLoading();
@@ -95,7 +95,7 @@ class CreateAnnouncementNotifier extends AsyncNotifier<void> {
             authorId: authorId,
             title:    title,
             body:     body,
-            batchId:  batchId,
+            courseId: courseId,
             sendPush: sendPush,
           );
       state = const AsyncData(null);

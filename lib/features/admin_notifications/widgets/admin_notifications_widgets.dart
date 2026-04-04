@@ -106,9 +106,9 @@ class AnnouncementStatsRow extends StatelessWidget {
           color: AppColors.info,
         ),
         AnnouncementStatCard(
-          label: 'Batch Targeted',
-          value: '${stats.batchTargetedCount}',
-          icon:  Icons.groups_rounded,
+          label: 'Course Targeted',
+          value: '${stats.courseTargetedCount}',
+          icon:  Icons.menu_book_rounded,
           color: AppColors.secondary,
         ),
         AnnouncementStatCard(
@@ -198,7 +198,7 @@ class AnnouncementCard extends StatelessWidget {
                             _Chip(
                               label: isWide
                                   ? 'Platform-wide'
-                                  : announcement.batchName ?? 'Batch',
+                                  : announcement.courseTitle ?? 'Course',
                               color: accentColor,
                               icon: isWide
                                   ? Icons.public_rounded
@@ -500,10 +500,10 @@ class AnnouncementFilterChips extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           _FilterChip(
-            label: 'Batch',
+            label: 'Course',
             selected: platformWideOnly == false,
             onTap: () => onChanged(false),
-            icon: Icons.groups_rounded,
+            icon: Icons.menu_book_rounded,
             color: AppColors.secondary,
           ),
         ],
@@ -639,7 +639,7 @@ class AnnouncementDetailSheet extends StatelessWidget {
                           Text(
                             isWide
                                 ? 'Platform-wide'
-                                : announcement.batchName ?? 'Batch',
+                                : announcement.courseTitle ?? 'Course',
                             style: AppTextStyles.labelMedium
                                 .copyWith(color: accent),
                           ),

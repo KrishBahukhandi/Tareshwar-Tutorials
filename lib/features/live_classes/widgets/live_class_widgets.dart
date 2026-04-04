@@ -106,10 +106,10 @@ class LiveClassCard extends StatelessWidget {
                         icon: Icons.timer_outlined,
                         label: '${lc.durationMinutes} min',
                       ),
-                      if (lc.batchName != null)
+                      if (lc.courseName != null)
                         _MetaChip(
-                          icon: Icons.group_work_rounded,
-                          label: lc.batchName!,
+                          icon: Icons.menu_book_rounded,
+                          label: lc.courseName!,
                         ),
                       if (showTeacherName && lc.teacherName != null)
                         _MetaChip(

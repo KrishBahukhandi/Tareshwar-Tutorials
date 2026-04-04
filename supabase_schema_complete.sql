@@ -620,6 +620,25 @@ as $$
   );
 $$;
 
+-- Checks whether the current user is enrolled in a specific batch.
+-- SECURITY DEFINER bypasses RLS so this can safely be called from
+-- the "batches: select" policy without triggering the "enrollments:
+-- select" policy and causing infinite recursion (42P17).
+create or replace function public.student_enrolled_in_batch(target_batch_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.enrollments
+    where batch_id   = target_batch_id
+      and student_id = auth.uid()
+  );
+$$;
+
 
 -- ═══════════════════════════════════════════════════════════════════
 --  ROW LEVEL SECURITY
@@ -705,10 +724,10 @@ create policy "batches: select"
       select 1 from public.courses c
        where c.id = batches.course_id and c.teacher_id = auth.uid()
     )
-    or exists (
-      select 1 from public.enrollments e
-       where e.batch_id = batches.id and e.student_id = auth.uid()
-    )
+    -- Use SECURITY DEFINER function to avoid circular RLS dependency:
+    -- a raw subquery on enrollments here triggers enrollments: select
+    -- which subqueries batches, creating infinite recursion (42P17).
+    or public.student_enrolled_in_batch(batches.id)
   );
 
 create policy "batches: insert"

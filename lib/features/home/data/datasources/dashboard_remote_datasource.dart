@@ -15,18 +15,15 @@ class DashboardRemoteDataSource {
   // ── Enrolled courses with progress ───────────────────────
   Future<List<EnrolledCourseEntity>> fetchEnrolledCourses(
       String studentId) async {
-    // Join enrollments → batches → courses; carry progress_percent
+    // Join enrollments → courses directly (batches removed)
     final rows = await _client
         .from('enrollments')
         .select('''
           progress_percent,
           enrolled_at,
-          batches!inner(
-            course_id,
-            courses!inner(
-              id, title, thumbnail_url, category_tag, total_lectures,
-              users!teacher_id(name)
-            )
+          courses!course_id(
+            id, title, thumbnail_url, category_tag, total_lectures,
+            users!teacher_id(name)
           )
         ''')
         .eq('student_id', studentId)
@@ -34,7 +31,7 @@ class DashboardRemoteDataSource {
 
     return rows.map<EnrolledCourseEntity>((row) {
       final course =
-          (row['batches']['courses'] as Map<String, dynamic>);
+          (row['courses'] as Map<String, dynamic>);
       final teacherName =
           (course['users'] as Map<String, dynamic>?)?['name'] as String?;
       return EnrolledCourseEntity(
@@ -54,14 +51,14 @@ class DashboardRemoteDataSource {
   // ── Recommended courses (published, not enrolled) ────────
   Future<List<RecommendedCourseEntity>> fetchRecommended(
       String studentId) async {
-    // Get enrolled course IDs
+    // Get enrolled course IDs directly from enrollments.course_id
     final enrolled = await _client
         .from('enrollments')
-        .select('batches!inner(course_id)')
+        .select('course_id')
         .eq('student_id', studentId);
 
     final enrolledIds = enrolled
-        .map<String>((e) => e['batches']['course_id'] as String)
+        .map<String>((e) => e['course_id'] as String)
         .toSet();
 
     // Fetch all published courses

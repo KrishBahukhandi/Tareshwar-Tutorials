@@ -30,7 +30,6 @@ class AdminService {
     final results = await Future.wait([
       _db.from('users').select('id, role'),
       _db.from('courses').select('id, is_published'),
-      _db.from('batches').select('id, is_active'),
       _db.from('enrollments').select('id'),
       _db.from('doubts').select('id, is_answered'),
       _db.from('test_attempts').select('id'),
@@ -38,10 +37,9 @@ class AdminService {
 
     final users       = results[0];
     final courses     = results[1];
-    final batches     = results[2];
-    final enrollments = results[3];
-    final doubts      = results[4];
-    final attempts    = results[5];
+    final enrollments = results[2];
+    final doubts      = results[3];
+    final attempts    = results[4];
 
     return AdminStats(
       totalStudents:
@@ -53,9 +51,6 @@ class AdminService {
       totalCourses: courses.length,
       publishedCourses:
           courses.where((c) => c['is_published'] == true).length,
-      totalBatches: batches.length,
-      activeBatches:
-          batches.where((b) => b['is_active'] == true).length,
       totalEnrollments: enrollments.length,
       totalDoubts: doubts.length,
       resolvedDoubts:
@@ -125,7 +120,6 @@ class AdminService {
   }
 
   Future<void> deleteUser(String userId) async {
-    // Deleting from users cascades to auth.users via the FK
     await _db.from('users').delete().eq('id', userId);
     await _audit.logAdminAction(
       action: 'user.deleted',
@@ -182,152 +176,15 @@ class AdminService {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  BATCHES (admin CRUD)
-  // ═══════════════════════════════════════════════════════
-
-  Future<List<AdminBatchRow>> fetchAllBatches() async {
-    final rows = await _db
-        .from('batches')
-        .select('*, courses!course_id(title)')
-        .order('created_at', ascending: false);
-
-    // Fetch enrollment counts
-    final batchIds =
-        rows.map((r) => r['id'] as String).toList();
-    Map<String, int> enrollCounts = {};
-    if (batchIds.isNotEmpty) {
-      final eRows = await _db
-          .from('enrollments')
-          .select('batch_id')
-          .inFilter('batch_id', batchIds);
-      for (final e in eRows) {
-        final bid = e['batch_id'] as String;
-        enrollCounts[bid] = (enrollCounts[bid] ?? 0) + 1;
-      }
-    }
-
-    return rows.map((r) {
-      final map = Map<String, dynamic>.from(r as Map);
-      final bid = map['id'] as String;
-      return AdminBatchRow(
-        id: bid,
-        batchName: map['batch_name'] as String,
-        courseId: map['course_id'] as String,
-        courseTitle:
-            (map['courses'] as Map?)?['title'] as String? ?? '—',
-        startDate:
-            DateTime.parse(map['start_date'] as String),
-        endDate: map['end_date'] != null
-            ? DateTime.parse(map['end_date'] as String)
-            : null,
-        maxStudents: map['max_students'] as int? ?? 50,
-        enrolledCount: enrollCounts[bid] ?? 0,
-        isActive: map['is_active'] as bool? ?? true,
-        createdAt:
-            DateTime.parse(map['created_at'] as String),
-      );
-    }).toList();
-  }
-
-  Future<AdminBatchRow> createBatch({
-    required String courseId,
-    required String batchName,
-    String? description,
-    required DateTime startDate,
-    DateTime? endDate,
-    int maxStudents = 50,
-  }) async {
-    final data = await _db
-        .from('batches')
-        .insert({
-          'course_id': courseId,
-          'batch_name': batchName,
-          'description': description,
-          'start_date':
-              startDate.toIso8601String().substring(0, 10),
-          'end_date': endDate?.toIso8601String().substring(0, 10),
-          'max_students': maxStudents,
-          'is_active': true,
-        })
-        .select('*, courses!course_id(title)')
-        .single();
-
-    final map = Map<String, dynamic>.from(data as Map);
-    await _audit.logAdminAction(
-      action: 'batch.created',
-      entityType: 'batch',
-      entityId: map['id'] as String,
-      details: {'course_id': courseId, 'batch_name': batchName},
-    );
-    return AdminBatchRow(
-      id: map['id'] as String,
-      batchName: map['batch_name'] as String,
-      courseId: map['course_id'] as String,
-      courseTitle:
-          (map['courses'] as Map?)?['title'] as String? ?? '—',
-      startDate: DateTime.parse(map['start_date'] as String),
-      endDate: map['end_date'] != null
-          ? DateTime.parse(map['end_date'] as String)
-          : null,
-      maxStudents: map['max_students'] as int? ?? 50,
-      enrolledCount: 0,
-      isActive: map['is_active'] as bool? ?? true,
-      createdAt:
-          DateTime.parse(map['created_at'] as String),
-    );
-  }
-
-  Future<void> updateBatch({
-    required String batchId,
-    String? batchName,
-    String? description,
-    DateTime? startDate,
-    DateTime? endDate,
-    int? maxStudents,
-    bool? isActive,
-  }) async {
-    final update = <String, dynamic>{};
-    if (batchName != null) update['batch_name'] = batchName;
-    if (description != null) update['description'] = description;
-    if (startDate != null) {
-      update['start_date'] =
-          startDate.toIso8601String().substring(0, 10);
-    }
-    if (endDate != null) {
-      update['end_date'] =
-          endDate.toIso8601String().substring(0, 10);
-    }
-    if (maxStudents != null) update['max_students'] = maxStudents;
-    if (isActive != null) update['is_active'] = isActive;
-    if (update.isEmpty) return;
-    await _db.from('batches').update(update).eq('id', batchId);
-    await _audit.logAdminAction(
-      action: 'batch.updated',
-      entityType: 'batch',
-      entityId: batchId,
-      details: update,
-    );
-  }
-
-  Future<void> deleteBatch(String batchId) async {
-    await _db.from('batches').delete().eq('id', batchId);
-    await _audit.logAdminAction(
-      action: 'batch.deleted',
-      entityType: 'batch',
-      entityId: batchId,
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════
   //  ENROLLMENTS
   // ═══════════════════════════════════════════════════════
 
-  Future<List<AdminEnrollmentRow>> fetchBatchEnrollments(
-      String batchId) async {
+  Future<List<AdminEnrollmentRow>> fetchCourseEnrollments(
+      String courseId) async {
     final rows = await _db
         .from('enrollments')
         .select('*, users!student_id(name, email)')
-        .eq('batch_id', batchId)
+        .eq('course_id', courseId)
         .order('enrolled_at', ascending: false);
 
     return rows.map((r) {
@@ -338,7 +195,7 @@ class AdminService {
         studentId: map['student_id'] as String,
         studentName: user?['name'] as String? ?? '—',
         studentEmail: user?['email'] as String? ?? '—',
-        batchId: map['batch_id'] as String,
+        courseId: map['course_id'] as String,
         enrolledAt:
             DateTime.parse(map['enrolled_at'] as String),
         progressPercent:
@@ -349,16 +206,16 @@ class AdminService {
 
   Future<void> enrollStudent({
     required String studentId,
-    required String batchId,
+    required String courseId,
   }) async {
     await _db.from('enrollments').insert({
       'student_id': studentId,
-      'batch_id': batchId,
+      'course_id': courseId,
     });
     await _audit.logAdminAction(
       action: 'enrollment.created',
       entityType: 'enrollment',
-      details: {'student_id': studentId, 'batch_id': batchId},
+      details: {'student_id': studentId, 'course_id': courseId},
     );
   }
 
@@ -417,18 +274,18 @@ class AdminService {
     required String authorId,
     required String title,
     required String body,
-    String? batchId, // null = platform-wide
+    String? courseId, // null = platform-wide
   }) async {
     await _db.from('announcements').insert({
       'author_id': authorId,
-      'batch_id': batchId,
+      'course_id': courseId,
       'title': title,
       'body': body,
     });
     await _audit.logAdminAction(
       action: 'announcement.created',
       entityType: 'announcement',
-      details: {'batch_id': batchId, 'title': title},
+      details: {'course_id': courseId, 'title': title},
     );
   }
 
@@ -439,8 +296,7 @@ class AdminService {
   }) async {
     final rows = await _db
         .from('announcements')
-        .select(
-            '*, users!author_id(name), batches!batch_id(batch_name)')
+        .select('*, users!author_id(name), courses!course_id(title)')
         .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
     return rows
@@ -473,8 +329,6 @@ class AdminStats {
   final int totalAdmins;
   final int totalCourses;
   final int publishedCourses;
-  final int totalBatches;
-  final int activeBatches;
   final int totalEnrollments;
   final int totalDoubts;
   final int resolvedDoubts;
@@ -486,8 +340,6 @@ class AdminStats {
     required this.totalAdmins,
     required this.totalCourses,
     required this.publishedCourses,
-    required this.totalBatches,
-    required this.activeBatches,
     required this.totalEnrollments,
     required this.totalDoubts,
     required this.resolvedDoubts,
@@ -520,41 +372,12 @@ class AdminCourseRow {
   });
 }
 
-class AdminBatchRow {
-  final String id;
-  final String batchName;
-  final String courseId;
-  final String courseTitle;
-  final DateTime startDate;
-  final DateTime? endDate;
-  final int maxStudents;
-  final int enrolledCount;
-  final bool isActive;
-  final DateTime createdAt;
-
-  const AdminBatchRow({
-    required this.id,
-    required this.batchName,
-    required this.courseId,
-    required this.courseTitle,
-    required this.startDate,
-    this.endDate,
-    required this.maxStudents,
-    required this.enrolledCount,
-    required this.isActive,
-    required this.createdAt,
-  });
-
-  double get fillPercent =>
-      maxStudents == 0 ? 0 : enrolledCount / maxStudents;
-}
-
 class AdminEnrollmentRow {
   final String id;
   final String studentId;
   final String studentName;
   final String studentEmail;
-  final String batchId;
+  final String courseId;
   final DateTime enrolledAt;
   final double progressPercent;
 
@@ -563,7 +386,7 @@ class AdminEnrollmentRow {
     required this.studentId,
     required this.studentName,
     required this.studentEmail,
-    required this.batchId,
+    required this.courseId,
     required this.enrolledAt,
     required this.progressPercent,
   });

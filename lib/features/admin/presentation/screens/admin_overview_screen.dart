@@ -73,22 +73,22 @@ class AdminOverviewScreen extends ConsumerWidget {
                         subtitle: '${stats.publishedCourses} published',
                       ),
                       AppKpiCard(
-                        label: 'Batches',
-                        value: '${stats.totalBatches}',
-                        icon: Icons.group_work_rounded,
+                        label: 'Enrollments',
+                        value: '${stats.totalEnrollments}',
+                        icon: Icons.how_to_reg_rounded,
                         color: AppColors.secondary,
-                        subtitle: '${stats.activeBatches} active',
+                        subtitle: 'All time',
                       ),
                     ]),
                     const SizedBox(height: AppSpacing.md),
                     // Row 2
                     _ResponsiveGrid(children: [
                       AppKpiCard(
-                        label: 'Enrollments',
-                        value: '${stats.totalEnrollments}',
+                        label: 'Active Courses',
+                        value: '${stats.publishedCourses}',
                         icon: Icons.assignment_turned_in_rounded,
                         color: AppColors.success,
-                        subtitle: 'All time',
+                        subtitle: '${stats.totalCourses} total',
                       ),
                       AppKpiCard(
                         label: 'Doubts Raised',
@@ -182,10 +182,10 @@ class _MetricsRow extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _ProgressMetric(
-              label: 'Batch Activation Rate',
-              value: stats.totalBatches == 0
+              label: 'Enrollment Rate',
+              value: stats.totalStudents == 0
                   ? 0
-                  : stats.activeBatches / stats.totalBatches,
+                  : (stats.totalEnrollments / stats.totalStudents).clamp(0.0, 1.0),
               color: AppColors.primary,
             ),
             const SizedBox(height: 14),
@@ -262,10 +262,10 @@ class _QuickActions extends ConsumerWidget {
         section: AdminSection.teachers
       ),
       (
-        label: 'New Batch',
-        icon: Icons.group_work_rounded,
+        label: 'New Course',
+        icon: Icons.menu_book_rounded,
         color: AppColors.secondary,
-        section: AdminSection.batches
+        section: AdminSection.courses
       ),
       (
         label: 'Announce',

@@ -17,7 +17,7 @@ class LiveClassService {
 
   // ── Select with joins ─────────────────────────────────────
   static const _select =
-      '*, batches(batch_name, courses(title)), users!teacher_id(name)';
+      '*, courses!course_id(title), users!teacher_id(name)';
 
   Future<String?> _currentRole() async {
     final uid = _client.auth.currentUser?.id;
@@ -31,24 +31,23 @@ class LiveClassService {
     return profile?['role'] as String?;
   }
 
-  Future<void> _requireTeacherOwnsBatch(String batchId, String teacherId) async {
+  Future<void> _requireTeacherOwnsCourse(String courseId, String teacherId) async {
     final role = await _currentRole();
     if (role == 'admin') return;
 
-    final batch = await _client
-        .from('batches')
-        .select('id, courses!inner(teacher_id)')
-        .eq('id', batchId)
+    final course = await _client
+        .from('courses')
+        .select('id, teacher_id')
+        .eq('id', courseId)
         .maybeSingle();
 
-    if (batch == null) {
-      throw StateError('Batch not found.');
+    if (course == null) {
+      throw StateError('Course not found.');
     }
 
-    final course = batch['courses'] as Map?;
-    if (course?['teacher_id'] != teacherId) {
+    if (course['teacher_id'] != teacherId) {
       throw StateError(
-        'You can only schedule live classes for your own batches.',
+        'You can only schedule live classes for your own courses.',
       );
     }
   }
@@ -75,26 +74,26 @@ class LiveClassService {
   }
 
   // ─────────────────────────────────────────────────────────
-  //  STUDENT: live classes for their enrolled batches
+  //  STUDENT: live classes for their enrolled courses
   // ─────────────────────────────────────────────────────────
   Future<List<LiveClassModel>> fetchStudentLiveClasses(
       String studentId) async {
-    // 1. Fetch batch IDs the student is enrolled in
+    // 1. Fetch course IDs the student is enrolled in
     final enrollments = await _client
         .from('enrollments')
-        .select('batch_id')
+        .select('course_id')
         .eq('student_id', studentId);
 
     if (enrollments.isEmpty) return [];
 
-    final batchIds =
-        enrollments.map((e) => e['batch_id'] as String).toList();
+    final courseIds =
+        enrollments.map((e) => e['course_id'] as String).toList();
 
-    // 2. Fetch live classes for those batches
+    // 2. Fetch live classes for those courses
     final data = await _client
         .from('live_classes')
         .select(_select)
-        .inFilter('batch_id', batchIds)
+        .inFilter('course_id', courseIds)
         .order('start_time', ascending: true);
 
     return data.map((e) => LiveClassModel.fromJson(e)).toList();
@@ -155,7 +154,7 @@ class LiveClassService {
   //  TEACHER: schedule a new live class
   // ─────────────────────────────────────────────────────────
   Future<LiveClassModel> scheduleLiveClass({
-    required String batchId,
+    required String courseId,
     required String teacherId,
     required String title,
     String? description,
@@ -163,12 +162,12 @@ class LiveClassService {
     required DateTime startTime,
     required int durationMinutes,
   }) async {
-    await _requireTeacherOwnsBatch(batchId, teacherId);
+    await _requireTeacherOwnsCourse(courseId, teacherId);
 
     final row = await _client
         .from('live_classes')
         .insert({
-          'batch_id': batchId,
+          'course_id': courseId,
           'teacher_id': teacherId,
           'title': title,
           'description': description,
@@ -215,21 +214,21 @@ class LiveClassService {
   }
 
   // ─────────────────────────────────────────────────────────
-  //  TEACHER: send notification to all students in a batch
+  //  TEACHER: send notification to all students in a course
   // ─────────────────────────────────────────────────────────
   Future<void> sendLiveClassNotification({
     required String liveClassId,
-    required String batchId,
+    required String courseId,
     required String title,
     required DateTime startTime,
   }) async {
     await _requireCanManageLiveClass(liveClassId);
 
-    // Get all student IDs in this batch
+    // Get all student IDs enrolled in this course
     final enrollments = await _client
         .from('enrollments')
         .select('student_id')
-        .eq('batch_id', batchId);
+        .eq('course_id', courseId);
 
     if (enrollments.isEmpty) return;
 

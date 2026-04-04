@@ -204,7 +204,6 @@ class _CourseTable extends StatelessWidget {
               DataColumn(label: Text('Course')),
               DataColumn(label: Text('Teacher')),
               DataColumn(label: Text('Price')),
-              DataColumn(label: Text('Batches')),
               DataColumn(label: Text('Students')),
               DataColumn(label: Text('Status')),
               DataColumn(label: Text('Created')),
@@ -273,22 +272,10 @@ class _CourseTable extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.groups_rounded,
-                            size: 14, color: AppColors.textHint),
-                        const SizedBox(width: 4),
-                        Text('${c.totalBatches}',
-                            style: AppTextStyles.bodySmall),
-                      ],
-                    ),
-                  ),
-                  DataCell(
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
                         const Icon(Icons.people_outline_rounded,
                             size: 14, color: AppColors.textHint),
                         const SizedBox(width: 4),
-                        Text('${c.totalEnrollments}',
+                        Text('${c.enrolledCount}',
                             style: AppTextStyles.bodySmall),
                       ],
                     ),

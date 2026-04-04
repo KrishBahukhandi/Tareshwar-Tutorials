@@ -27,8 +27,8 @@ class _CreateAnnouncementScreenState
   final _bodyCtrl  = TextEditingController();
 
   bool    _platformWide    = true;
-  String? _selectedBatchId;
-  String? _selectedBatchName;
+  String? _selectedCourseId;
+  String? _selectedCourseTitle;
   int?    _targetAudience;   // resolved enrolled count
   bool    _sendPush        = true;
   bool    _submitting      = false;
@@ -58,22 +58,22 @@ class _CreateAnnouncementScreenState
       setState(() => _targetAudience = null);
       return;
     }
-    if (_selectedBatchId == null) {
+    if (_selectedCourseId == null) {
       setState(() => _targetAudience = null);
       return;
     }
     final count = await ref
         .read(adminNotificationsServiceProvider)
-        .fetchEnrolledCount(_selectedBatchId!);
+        .fetchEnrolledCount(_selectedCourseId!);
     if (mounted) setState(() => _targetAudience = count);
   }
 
   // ── Submit ─────────────────────────────────────────────────
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
-    if (!_platformWide && _selectedBatchId == null) {
+    if (!_platformWide && _selectedCourseId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a batch')),
+        const SnackBar(content: Text('Please select a course')),
       );
       return;
     }
@@ -94,7 +94,7 @@ class _CreateAnnouncementScreenState
             authorId: user.id,
             title:    _titleCtrl.text.trim(),
             body:     _bodyCtrl.text.trim(),
-            batchId:  _platformWide ? null : _selectedBatchId,
+            courseId: _platformWide ? null : _selectedCourseId,
             sendPush: _sendPush,
           );
 
@@ -102,7 +102,7 @@ class _CreateAnnouncementScreenState
         messenger.showSnackBar(SnackBar(
           content: Text(
             _sendPush
-                ? '✓ Announcement sent${row.isPlatformWide ? ' to all students' : ' to ${row.batchName ?? 'batch'}'}'
+                ? '✓ Announcement sent${row.isPlatformWide ? ' to all students' : ' to ${row.courseTitle ?? 'course'}'}'
                 : '✓ Announcement created (no push)',
           ),
           backgroundColor: AppColors.success,
@@ -120,9 +120,9 @@ class _CreateAnnouncementScreenState
   Future<bool> _showConfirmation() async {
     final target = _platformWide
         ? 'all active students (platform-wide)'
-        : (_selectedBatchName != null
-            ? '"$_selectedBatchName"'
-            : 'selected batch');
+        : (_selectedCourseTitle != null
+            ? '"$_selectedCourseTitle"'
+            : 'selected course');
 
     return await showDialog<bool>(
           context: context,
@@ -179,7 +179,7 @@ class _CreateAnnouncementScreenState
   // ── Build ──────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final batchesAsync = ref.watch(batchPickerProvider);
+    final coursesAsync = ref.watch(coursePickerProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -294,24 +294,24 @@ class _CreateAnnouncementScreenState
               onChanged: (v) {
                 setState(() {
                   _platformWide    = v;
-                  _selectedBatchId = null;
-                  _selectedBatchName = null;
+                  _selectedCourseId = null;
+                  _selectedCourseTitle = null;
                   _targetAudience  = null;
                 });
               },
             ),
             const SizedBox(height: 14),
 
-            // Batch picker
+            // Course picker
             if (!_platformWide) ...[
-              batchesAsync.when(
+              coursesAsync.when(
                 loading: () => const Center(
                     child: CircularProgressIndicator()),
-                error: (_, _) => const Text(
-                    'Could not load batches.',
+                error: (_, __) => const Text(
+                    'Could not load courses.',
                     style: TextStyle(color: AppColors.error)),
-                data: (batches) {
-                  if (batches.isEmpty) {
+                data: (courses) {
+                  if (courses.isEmpty) {
                     return Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -327,35 +327,34 @@ class _CreateAnnouncementScreenState
                           const Icon(Icons.warning_amber_rounded,
                               color: AppColors.warning),
                           const SizedBox(width: 8),
-                          Text('No active batches found.',
+                          Text('No active courses found.',
                               style: AppTextStyles.bodyMedium),
                         ],
                       ),
                     );
                   }
                   return DropdownButtonFormField<String>(
-                    initialValue: _selectedBatchId,
+                    initialValue: _selectedCourseId,
                     decoration: const InputDecoration(
-                      labelText: 'Select Batch *',
-                      prefixIcon: Icon(Icons.groups_rounded),
+                      labelText: 'Select Course *',
+                      prefixIcon: Icon(Icons.menu_book_rounded),
                     ),
                     isExpanded: true,
-                    items: batches
-                        .map((b) => DropdownMenuItem(
-                              value: b.id,
+                    items: courses
+                        .map((c) => DropdownMenuItem(
+                              value: c.id,
                               child: Column(
                                 crossAxisAlignment:
                                     CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(b.batchName,
+                                  Text(c.displayName,
                                       style:
                                           AppTextStyles.labelLarge,
                                       overflow:
                                           TextOverflow.ellipsis),
                                   Text(
-                                    '${b.courseTitle} · '
-                                    '${b.enrolledCount} students',
+                                    '${c.enrolledCount} students',
                                     style: AppTextStyles.bodySmall,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -364,19 +363,18 @@ class _CreateAnnouncementScreenState
                             ))
                         .toList(),
                     onChanged: (v) {
-                      final batch = batches
-                          .firstWhere((b) => b.id == v);
+                      final course = courses
+                          .firstWhere((c) => c.id == v);
                       setState(() {
-                        _selectedBatchId   = v;
-                        _selectedBatchName = batch.batchName;
-                        _targetAudience =
-                            batch.enrolledCount;
+                        _selectedCourseId    = v;
+                        _selectedCourseTitle = course.displayName;
+                        _targetAudience      = course.enrolledCount;
                       });
                       _resolveAudience();
                     },
                     validator: (v) =>
                         (!_platformWide && v == null)
-                            ? 'Please select a batch'
+                            ? 'Please select a course'
                             : null,
                   );
                 },
@@ -495,9 +493,9 @@ class _TargetToggle extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: _ToggleCard(
-            label: 'Specific Batch',
-            subtitle: 'Target one batch only',
-            icon: Icons.groups_rounded,
+            label: 'Specific Course',
+            subtitle: 'Target one course only',
+            icon: Icons.menu_book_rounded,
             selected: !platformWide,
             color: AppColors.secondary,
             onTap: () => onChanged(false),

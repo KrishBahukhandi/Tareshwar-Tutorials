@@ -78,30 +78,17 @@ class _StudentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Group by batch
-    final batches = <String, List<EnrolledStudentInfo>>{};
-    for (final s in students) {
-      batches.putIfAbsent(s.batchName, () => []).add(s);
-    }
-
     return Column(
       children: [
         // ── Summary bar ─────────────────────────────
-        _SummaryBar(total: students.length, batches: batches.length),
+        _SummaryBar(total: students.length),
 
         // ── List ─────────────────────────────────────
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: batches.length,
-            itemBuilder: (ctx, i) {
-              final batchName = batches.keys.elementAt(i);
-              final batchStudents = batches[batchName]!;
-              return _BatchSection(
-                batchName: batchName,
-                students: batchStudents,
-              );
-            },
+            itemCount: students.length,
+            itemBuilder: (ctx, i) => _StudentTile(student: students[i]),
           ),
         ),
       ],
@@ -111,8 +98,7 @@ class _StudentList extends StatelessWidget {
 
 class _SummaryBar extends StatelessWidget {
   final int total;
-  final int batches;
-  const _SummaryBar({required this.total, required this.batches});
+  const _SummaryBar({required this.total});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -126,12 +112,6 @@ class _SummaryBar extends StatelessWidget {
                 label: 'Total Students',
                 value: '$total',
                 color: AppColors.primary),
-            const SizedBox(width: 16),
-            _SumCard(
-                icon: Icons.group_work_rounded,
-                label: 'Batches',
-                value: '$batches',
-                color: AppColors.secondary),
           ],
         ),
       );
@@ -179,41 +159,6 @@ class _SumCard extends StatelessWidget {
       );
 }
 
-class _BatchSection extends StatelessWidget {
-  final String batchName;
-  final List<EnrolledStudentInfo> students;
-  const _BatchSection(
-      {required this.batchName, required this.students});
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8, top: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.group_work_rounded,
-                    size: 16, color: AppColors.primary),
-                const SizedBox(width: 6),
-                Text(
-                  batchName.isEmpty ? 'Default Batch' : batchName,
-                  style: AppTextStyles.headlineSmall.copyWith(
-                      fontSize: 13,
-                      color: AppColors.primary),
-                ),
-                const SizedBox(width: 8),
-                Text('(${students.length})',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                        fontSize: 12)),
-              ],
-            ),
-          ),
-          ...students.map((s) => _StudentTile(student: s)),
-        ],
-      );
-}
 
 class _StudentTile extends StatelessWidget {
   final EnrolledStudentInfo student;

@@ -234,13 +234,6 @@ class _InfoGrid extends StatelessWidget {
           value: '${lc.durationMinutes} minutes',
           color: AppColors.warning,
         ),
-        if (lc.batchName != null)
-          _InfoCard(
-            icon: Icons.group_work_rounded,
-            label: 'Batch',
-            value: lc.batchName!,
-            color: AppColors.success,
-          ),
         if (lc.teacherName != null)
           _InfoCard(
             icon: Icons.person_rounded,
@@ -391,7 +384,7 @@ class _JoinButton extends ConsumerWidget {
       ref.read(analyticsServiceProvider).trackLiveClassJoined(
             liveClassId:    liveClass.id,
             liveClassTitle: liveClass.title,
-            batchId:        liveClass.batchId,
+            courseId:       liveClass.courseId,
           );
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {

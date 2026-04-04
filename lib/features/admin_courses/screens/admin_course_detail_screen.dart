@@ -124,7 +124,7 @@ class AdminCourseDetailScreen extends ConsumerWidget {
       title: 'Delete Course',
       message:
           'Permanently delete "${c.title}"?\n'
-          'All batches, enrollments, and content will be removed. '
+          'All enrollments and content will be removed. '
           'This cannot be undone.',
       confirmLabel: 'Delete',
     );
@@ -164,9 +164,8 @@ class _DetailBody extends StatelessWidget {
                   ),
                   const SizedBox(width: 20),
                   Expanded(
-                    child: _BatchesSection(
-                        batches: detail.batches,
-                        courseId: detail.course.id),
+                    child: _EnrollmentsSection(
+                        enrollments: detail.enrollments),
                   ),
                 ],
               )
@@ -175,9 +174,8 @@ class _DetailBody extends StatelessWidget {
                 const SizedBox(height: 16),
                 _StatsRow(detail: detail),
                 const SizedBox(height: 16),
-                _BatchesSection(
-                    batches: detail.batches,
-                    courseId: detail.course.id),
+                _EnrollmentsSection(
+                    enrollments: detail.enrollments),
               ]);
       }),
     );
@@ -320,19 +318,10 @@ class _StatsRow extends StatelessWidget {
       children: [
         Expanded(
           child: CourseStatChip(
-            label: 'Batches',
-            value: '${c.totalBatches}',
-            icon: Icons.groups_rounded,
-            color: AppColors.primary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: CourseStatChip(
             label: 'Students',
-            value: '${c.totalEnrollments}',
+            value: '${c.enrolledCount}',
             icon: Icons.people_alt_rounded,
-            color: AppColors.info,
+            color: AppColors.primary,
           ),
         ),
         const SizedBox(width: 10),
@@ -350,129 +339,62 @@ class _StatsRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Batches section
+//  Enrollments section
 // ─────────────────────────────────────────────────────────────
-class _BatchesSection extends StatelessWidget {
-  final List<AdminCourseBatch> batches;
-  final String courseId;
+class _EnrollmentsSection extends StatelessWidget {
+  final List<AdminCourseEnrollment> enrollments;
 
-  const _BatchesSection(
-      {required this.batches, required this.courseId});
+  const _EnrollmentsSection({required this.enrollments});
 
   @override
   Widget build(BuildContext context) {
     return CourseSectionCard(
-      title: 'Batches (${batches.length})',
-      icon: Icons.groups_rounded,
+      title: 'Enrolled Students (${enrollments.length})',
+      icon: Icons.people_alt_rounded,
       iconColor: AppColors.primary,
-      child: batches.isEmpty
+      child: enrollments.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(28),
               child: AdminCoursesEmptyState(
-                message:
-                    'No batches yet.\nCreate batches via the Batches panel.',
-                icon: Icons.groups_outlined,
+                message: 'No students enrolled yet.',
+                icon: Icons.people_outline_rounded,
               ),
             )
           : ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: batches.length,
+              itemCount: enrollments.length,
               separatorBuilder: (_, _) =>
                   const Divider(height: 1, indent: 20),
               itemBuilder: (_, i) {
-                final b = batches[i];
-                return _BatchTile(batch: b);
+                final e = enrollments[i];
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 6),
+                  leading: CircleAvatar(
+                    radius: 18,
+                    backgroundColor:
+                        AppColors.primary.withValues(alpha: 0.12),
+                    child: Text(
+                      e.studentName.isNotEmpty
+                          ? e.studentName[0].toUpperCase()
+                          : '?',
+                      style: AppTextStyles.labelMedium.copyWith(
+                          color: AppColors.primary),
+                    ),
+                  ),
+                  title: Text(e.studentName,
+                      style: AppTextStyles.labelLarge),
+                  subtitle: Text(e.studentEmail,
+                      style: AppTextStyles.bodySmall),
+                  trailing: Text(
+                    '${e.progressPercent.toStringAsFixed(0)}%',
+                    style: AppTextStyles.labelMedium
+                        .copyWith(color: AppColors.success),
+                  ),
+                );
               },
             ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  Batch list tile
-// ─────────────────────────────────────────────────────────────
-class _BatchTile extends StatelessWidget {
-  final AdminCourseBatch batch;
-  const _BatchTile({required this.batch});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20, vertical: 8),
-      leading: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: (batch.isActive ? AppColors.primary : AppColors.textHint)
-              .withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(Icons.group_rounded,
-            color: batch.isActive
-                ? AppColors.primary
-                : AppColors.textHint,
-            size: 20),
-      ),
-      title: Text(batch.batchName, style: AppTextStyles.labelLarge),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 4),
-          Text(
-            '${fmtCourseDate(batch.startDate)}'
-            '${batch.endDate != null ? ' – ${fmtCourseDate(batch.endDate!)}' : ''}',
-            style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
-          ),
-          const SizedBox(height: 4),
-          // Enrollment progress bar
-          Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: batch.fillPercent,
-                    backgroundColor:
-                        AppColors.surfaceVariant,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      batch.isFull
-                          ? AppColors.error
-                          : AppColors.primary,
-                    ),
-                    minHeight: 5,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${batch.enrolledCount}/${batch.maxStudents}',
-                style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
-              ),
-            ],
-          ),
-        ],
-      ),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: (batch.isActive
-                  ? AppColors.success
-                  : AppColors.textHint)
-              .withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          batch.isActive ? 'Active' : 'Ended',
-          style: AppTextStyles.labelSmall.copyWith(
-            color: batch.isActive
-                ? AppColors.success
-                : AppColors.textHint,
-          ),
-        ),
-      ),
     );
   }
 }

@@ -34,6 +34,7 @@ class CourseService {
   // ═══════════════════════════════════════════════════════════
 
   /// Fetch all (optionally only published) courses with teacher name.
+  /// Capped at 150 courses — prevents unbounded queries as the catalogue grows.
   Future<List<CourseModel>> fetchCourses({bool publishedOnly = false}) async {
     var q = _client.from('courses').select('*, users!teacher_id(name)');
 
@@ -41,9 +42,10 @@ class CourseService {
     if (publishedOnly) {
       rows = await q
           .eq('is_published', true)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(150);
     } else {
-      rows = await q.order('created_at', ascending: false);
+      rows = await q.order('created_at', ascending: false).limit(150);
     }
 
     return rows.map((r) {
@@ -81,31 +83,95 @@ class CourseService {
         .toList();
   }
 
-  /// Courses the student is enrolled in (via any batch).
-  /// Returns a deduplicated list of CourseModels.
+  /// Courses the student is enrolled in (direct enrollment).
   Future<List<CourseModel>> fetchEnrolledCourses(String studentId) async {
     final rows = await _client
         .from('enrollments')
-        .select(
-          'batch_id, batches!inner(course_id, courses!inner(*, users!teacher_id(name)))',
-        )
+        .select('course_id, courses!inner(*, users!teacher_id(name))')
         .eq('student_id', studentId);
 
-    final seen = <String>{};
     final courses = <CourseModel>[];
     for (final r in rows) {
-      final batchMap = r['batches'] as Map?;
-      final courseMap = batchMap?['courses'] as Map?;
+      final courseMap = r['courses'] as Map?;
       if (courseMap == null) continue;
       final map = Map<String, dynamic>.from(courseMap);
-      // Attach teacher name from nested users join if present
       final usersMap = map['users'] as Map?;
       map['teacher_name'] = usersMap?['name'];
-      if (seen.add(map['id'] as String)) {
-        courses.add(CourseModel.fromJson(map));
-      }
+      courses.add(CourseModel.fromJson(map));
     }
     return courses;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  ENROLLMENT
+  // ═══════════════════════════════════════════════════════════
+
+  /// Check if a student is enrolled in a course.
+  Future<bool> isStudentEnrolled({
+    required String studentId,
+    required String courseId,
+  }) async {
+    final rows = await _client
+        .from('enrollments')
+        .select('id')
+        .eq('student_id', studentId)
+        .eq('course_id', courseId);
+    return rows.isNotEmpty;
+  }
+
+  /// Enroll a student into a course (admin/teacher only — enforced by RLS).
+  Future<EnrollmentModel> enrollStudent({
+    required String studentId,
+    required String courseId,
+  }) async {
+    final row = await _client
+        .from('enrollments')
+        .insert({'student_id': studentId, 'course_id': courseId})
+        .select('*, courses!course_id(title)')
+        .single();
+    return EnrollmentModel.fromJson(Map<String, dynamic>.from(row as Map));
+  }
+
+  /// Remove an enrollment by ID.
+  Future<void> removeEnrollment(String enrollmentId) async {
+    await _client.from('enrollments').delete().eq('id', enrollmentId);
+  }
+
+  /// All enrollments for a course (admin/teacher).
+  Future<List<EnrollmentModel>> fetchCourseEnrollments(String courseId) async {
+    final rows = await _client
+        .from('enrollments')
+        .select('*, users!student_id(name, email)')
+        .eq('course_id', courseId)
+        .order('enrolled_at', ascending: false);
+    return rows
+        .map((r) => EnrollmentModel.fromJson(Map<String, dynamic>.from(r as Map)))
+        .toList();
+  }
+
+  /// All enrollments for a student.
+  Future<List<EnrollmentModel>> fetchStudentEnrollments(String studentId) async {
+    final rows = await _client
+        .from('enrollments')
+        .select('*, courses!course_id(title)')
+        .eq('student_id', studentId)
+        .order('enrolled_at', ascending: false);
+    return rows
+        .map((r) => EnrollmentModel.fromJson(Map<String, dynamic>.from(r as Map)))
+        .toList();
+  }
+
+  /// Update progress percentage for an enrollment.
+  Future<void> updateEnrollmentProgress({
+    required String studentId,
+    required String courseId,
+    required double percent,
+  }) async {
+    await _client
+        .from('enrollments')
+        .update({'progress_percent': percent})
+        .eq('student_id', studentId)
+        .eq('course_id', courseId);
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -176,32 +242,25 @@ class CourseService {
   //  SUBJECTS (read-only convenience; writes via BatchService)
   // ═══════════════════════════════════════════════════════════
 
-  /// Subjects for a course, optionally scoped to a batch, with nested data.
-  Future<List<SubjectModel>> fetchSubjects(
-    String courseId, {
-    String? batchId,
-  }) async {
-    var q = _client
+  /// Subjects for a course with nested chapters/lectures.
+  Future<List<SubjectModel>> fetchSubjects(String courseId) async {
+    final rows = await _client
         .from('subjects')
         .select('*, chapters(*, lectures(*))')
-        .eq('course_id', courseId);
-    if (batchId != null) q = q.eq('batch_id', batchId);
-
-    final rows = await q.order('sort_order');
+        .eq('course_id', courseId)
+        .order('sort_order');
     return rows
         .map((r) => SubjectModel.fromJson(Map<String, dynamic>.from(r as Map)))
         .toList();
   }
 
   /// Flat subjects list (no nested chapters/lectures).
-  Future<List<SubjectModel>> fetchSubjectsFlat(
-    String courseId, {
-    String? batchId,
-  }) async {
-    var q = _client.from('subjects').select().eq('course_id', courseId);
-    if (batchId != null) q = q.eq('batch_id', batchId);
-
-    final rows = await q.order('sort_order');
+  Future<List<SubjectModel>> fetchSubjectsFlat(String courseId) async {
+    final rows = await _client
+        .from('subjects')
+        .select()
+        .eq('course_id', courseId)
+        .order('sort_order');
     return rows
         .map(
           (r) => SubjectModel.fromJson({
@@ -210,6 +269,72 @@ class CourseService {
           }),
         )
         .toList();
+  }
+
+  // ── Subject / Chapter write methods (moved from batch_service) ──
+
+  Future<SubjectModel> createSubject({
+    required String courseId,
+    required String name,
+    int sortOrder = 0,
+  }) async {
+    final row = await _client
+        .from('subjects')
+        .insert({'course_id': courseId, 'name': name, 'sort_order': sortOrder})
+        .select()
+        .single();
+    return SubjectModel.fromJson({
+      ...Map<String, dynamic>.from(row as Map),
+      'chapters': <dynamic>[],
+    });
+  }
+
+  Future<void> updateSubject({
+    required String subjectId,
+    String? name,
+    int? sortOrder,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (sortOrder != null) payload['sort_order'] = sortOrder;
+    if (payload.isEmpty) return;
+    await _client.from('subjects').update(payload).eq('id', subjectId);
+  }
+
+  Future<void> deleteSubject(String subjectId) async {
+    await _client.from('subjects').delete().eq('id', subjectId);
+  }
+
+  Future<ChapterModel> createChapter({
+    required String subjectId,
+    required String name,
+    int sortOrder = 0,
+  }) async {
+    final row = await _client
+        .from('chapters')
+        .insert({'subject_id': subjectId, 'name': name, 'sort_order': sortOrder})
+        .select()
+        .single();
+    return ChapterModel.fromJson({
+      ...Map<String, dynamic>.from(row as Map),
+      'lectures': <dynamic>[],
+    });
+  }
+
+  Future<void> updateChapter({
+    required String chapterId,
+    String? name,
+    int? sortOrder,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (sortOrder != null) payload['sort_order'] = sortOrder;
+    if (payload.isEmpty) return;
+    await _client.from('chapters').update(payload).eq('id', chapterId);
+  }
+
+  Future<void> deleteChapter(String chapterId) async {
+    await _client.from('chapters').delete().eq('id', chapterId);
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -430,10 +555,16 @@ class CourseService {
     required String studentId,
   }) async {
     try {
+      // Limit to the 500 most-recently-updated rows.
+      // A student who has watched hundreds of lectures across many
+      // courses would otherwise return thousands of rows on every
+      // home-screen load, exhausting memory and slowing the query.
       final rows = await _client
           .from('watch_progress')
           .select()
-          .eq('student_id', studentId);
+          .eq('student_id', studentId)
+          .order('updated_at', ascending: false)
+          .limit(500);
       return {
         for (final r in rows)
           (r['lecture_id'] as String): LectureProgressModel.fromJson(

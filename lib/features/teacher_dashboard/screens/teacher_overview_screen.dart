@@ -139,7 +139,7 @@ class _StatsGrid extends StatelessWidget {
         crossAxisCount: cols,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
-        childAspectRatio: 2.4,
+        childAspectRatio: 2.8,
       ),
       itemBuilder: (_, i) => cards[i],
     );
@@ -310,7 +310,7 @@ class _StatsShimmer extends StatelessWidget {
           crossAxisCount: 4,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          childAspectRatio: 2.4,
+          childAspectRatio: 2.8,
         ),
         itemBuilder: (ctx, idx) => Container(
           decoration: BoxDecoration(

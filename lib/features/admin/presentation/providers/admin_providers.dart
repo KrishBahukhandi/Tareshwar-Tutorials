@@ -12,7 +12,6 @@ enum AdminSection {
   students,
   teachers,
   courses,
-  batches,
   liveClasses,
   payments,
   announcements,
@@ -27,7 +26,6 @@ extension AdminSectionExt on AdminSection {
       case AdminSection.students:       return 'Students';
       case AdminSection.teachers:       return 'Teachers';
       case AdminSection.courses:        return 'Courses';
-      case AdminSection.batches:        return 'Batches';
       case AdminSection.liveClasses:    return 'Live Classes';
       case AdminSection.payments:       return 'Payments';
       case AdminSection.announcements:  return 'Announcements';
@@ -65,10 +63,6 @@ final adminCoursesProvider =
     FutureProvider.autoDispose<List<AdminCourseRow>>((ref) =>
         ref.watch(adminServiceProvider).fetchAllCourses());
 
-final adminBatchListProvider =
-    FutureProvider.autoDispose<List<AdminBatchRow>>((ref) =>
-        ref.watch(adminServiceProvider).fetchAllBatches());
-
 final adminDoubtsProvider =
     FutureProvider.autoDispose<List<AdminDoubtRow>>((ref) =>
         ref.watch(adminServiceProvider).fetchDoubts(limit: 200));
@@ -81,4 +75,3 @@ final adminAnnouncementsProvider =
 final adminStudentSearchProvider = StateProvider<String>((ref) => '');
 final adminTeacherSearchProvider = StateProvider<String>((ref) => '');
 final adminCourseSearchProvider  = StateProvider<String>((ref) => '');
-final adminBatchSearchProvider   = StateProvider<String>((ref) => '');

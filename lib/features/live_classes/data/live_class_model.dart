@@ -6,7 +6,7 @@ enum LiveClassStatus { upcoming, live, ended }
 
 class LiveClassModel {
   final String id;
-  final String batchId;
+  final String courseId;
   final String teacherId;
   final String title;
   final String? description;
@@ -17,13 +17,12 @@ class LiveClassModel {
   final DateTime createdAt;
 
   // Joined fields (not in DB column, fetched via join)
-  final String? batchName;
   final String? teacherName;
   final String? courseName;
 
   const LiveClassModel({
     required this.id,
-    required this.batchId,
+    required this.courseId,
     required this.teacherId,
     required this.title,
     this.description,
@@ -32,7 +31,6 @@ class LiveClassModel {
     required this.durationMinutes,
     this.notificationSent = false,
     required this.createdAt,
-    this.batchName,
     this.teacherName,
     this.courseName,
   });
@@ -57,7 +55,7 @@ class LiveClassModel {
 
   factory LiveClassModel.fromJson(Map<String, dynamic> json) => LiveClassModel(
         id: json['id'] as String,
-        batchId: json['batch_id'] as String,
+        courseId: json['course_id'] as String,
         teacherId: json['teacher_id'] as String,
         title: json['title'] as String,
         description: json['description'] as String?,
@@ -66,21 +64,16 @@ class LiveClassModel {
         durationMinutes: json['duration_minutes'] as int? ?? 60,
         notificationSent: json['notification_sent'] as bool? ?? false,
         createdAt: DateTime.parse(json['created_at'] as String),
-        batchName: json['batches'] != null
-            ? (json['batches'] as Map<String, dynamic>)['batch_name'] as String?
-            : null,
         teacherName: json['users'] != null
             ? (json['users'] as Map<String, dynamic>)['name'] as String?
             : null,
-        courseName: json['batches'] != null &&
-                (json['batches'] as Map<String, dynamic>)['courses'] != null
-            ? ((json['batches'] as Map<String, dynamic>)['courses']
-                    as Map<String, dynamic>)['title'] as String?
+        courseName: json['courses'] != null
+            ? (json['courses'] as Map<String, dynamic>)['title'] as String?
             : null,
       );
 
   Map<String, dynamic> toInsertJson() => {
-        'batch_id': batchId,
+        'course_id': courseId,
         'teacher_id': teacherId,
         'title': title,
         'description': description,
@@ -99,7 +92,7 @@ class LiveClassModel {
   }) =>
       LiveClassModel(
         id: id,
-        batchId: batchId,
+        courseId: courseId,
         teacherId: teacherId,
         title: title ?? this.title,
         description: description ?? this.description,
@@ -108,7 +101,6 @@ class LiveClassModel {
         durationMinutes: durationMinutes ?? this.durationMinutes,
         notificationSent: notificationSent ?? this.notificationSent,
         createdAt: createdAt,
-        batchName: batchName,
         teacherName: teacherName,
         courseName: courseName,
       );

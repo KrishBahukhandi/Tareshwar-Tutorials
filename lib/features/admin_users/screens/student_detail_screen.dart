@@ -190,14 +190,11 @@ class _StudentDetailBody extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 20),
-                  // Right column: courses + batches
+                  // Right column: courses
                   Expanded(
                     child: Column(
                       children: [
                         _CoursesSection(courses: detail.enrolledCourses),
-                        const SizedBox(height: 16),
-                        _BatchesSection(
-                            batches: detail.batchMemberships),
                       ],
                     ),
                   ),
@@ -215,8 +212,6 @@ class _StudentDetailBody extends StatelessWidget {
                   _StatsRow(detail: detail),
                   const SizedBox(height: 16),
                   _CoursesSection(courses: detail.enrolledCourses),
-                  const SizedBox(height: 16),
-                  _BatchesSection(batches: detail.batchMemberships),
                 ],
               );
       }),
@@ -435,15 +430,6 @@ class _StatsRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: StatChip(
-            label: 'Batches',
-            value: '${detail.batchMemberships.length}',
-            icon: Icons.groups_rounded,
-            color: AppColors.info,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: StatChip(
             label: 'Tests',
             value: '${detail.testAttemptCount}',
             icon: Icons.quiz_rounded,
@@ -541,82 +527,6 @@ class _CoursesSection extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Batch memberships section
-// ─────────────────────────────────────────────────────────────
-class _BatchesSection extends StatelessWidget {
-  final List<AdminUserBatch> batches;
-  const _BatchesSection({required this.batches});
-
-  @override
-  Widget build(BuildContext context) {
-    return DetailSectionCard(
-      title: 'Batch Memberships (${batches.length})',
-      icon: Icons.groups_rounded,
-      iconColor: AppColors.info,
-      child: batches.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.all(24),
-              child: AdminUsersEmptyState(
-                  message: 'Not a member of any batch.',
-                  icon: Icons.groups_outlined),
-            )
-          : ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: batches.length,
-              separatorBuilder: (_, _) =>
-                  const Divider(height: 1, indent: 20),
-              itemBuilder: (_, i) {
-                final b = batches[i];
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 6),
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.info.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.group_rounded,
-                        color: AppColors.info, size: 20),
-                  ),
-                  title: Text(b.batchName,
-                      style: AppTextStyles.labelLarge),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Course: ${b.courseTitle}',
-                          style: AppTextStyles.caption),
-                      Text('Joined: ${fmtDate(b.enrolledAt)}',
-                          style: AppTextStyles.caption),
-                    ],
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: b.isActive
-                          ? AppColors.success.withValues(alpha: 0.1)
-                          : AppColors.textHint.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      b.isActive ? 'Active' : 'Ended',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: b.isActive
-                            ? AppColors.success
-                            : AppColors.textHint,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────
 //  AppBar trailing actions

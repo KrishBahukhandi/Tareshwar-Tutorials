@@ -30,7 +30,6 @@ class AdminSidebar extends ConsumerWidget {
     (section: AdminSection.students,      icon: Icons.people_alt_rounded),
     (section: AdminSection.teachers,      icon: Icons.school_rounded),
     (section: AdminSection.courses,       icon: Icons.menu_book_rounded),
-    (section: AdminSection.batches,       icon: Icons.group_work_rounded),
     (section: AdminSection.liveClasses,   icon: Icons.video_camera_front_rounded),
     (section: AdminSection.payments,      icon: Icons.payments_rounded),
     (section: AdminSection.announcements, icon: Icons.campaign_rounded),
@@ -57,7 +56,8 @@ class AdminSidebar extends ConsumerWidget {
         children: [
           // ── Brand ────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 20, 12, 14),
+            padding: EdgeInsets.fromLTRB(
+                collapsed ? 5 : 12, 20, collapsed ? 5 : 12, 14),
             child: Row(
               children: [
                 if (collapsed)
@@ -87,7 +87,7 @@ class AdminSidebar extends ConsumerWidget {
                       ),
                     ),
                   ),
-                const SizedBox(width: 8),
+                if (!collapsed) const SizedBox(width: 8),
                 // collapse toggle
                 GestureDetector(
                   onTap: onToggle,

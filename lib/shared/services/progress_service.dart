@@ -80,6 +80,15 @@ class ProgressService {
 
   ProgressService(this._db, this._analytics);
 
+  // ── Write throttle ──────────────────────────────────────────
+  // At 5k concurrent students calling saveProgress every 10s,
+  // that is 500 writes/sec. We skip the DB write if the lecture
+  // hasn't changed state significantly since the last write.
+  // Completion writes are ALWAYS passed through.
+  final Map<String, (int, DateTime)> _writeThrottle = {};
+  static const _writeInterval = Duration(seconds: 15);
+  static const _writeProgressDelta = 10; // seconds of watched time
+
   // ───────────────────────────────────────────────────────────
   //  1. Single lecture progress (used by player to resume)
   // ───────────────────────────────────────────────────────────
@@ -115,6 +124,19 @@ class ProgressService {
     String? courseId,
     String? courseTitle,
   }) async {
+    // Throttle non-completion writes to reduce DB pressure.
+    if (!completed) {
+      final key = '$studentId:$lectureId';
+      final now = DateTime.now();
+      final last = _writeThrottle[key];
+      if (last != null) {
+        final elapsed = now.difference(last.$2);
+        final delta = (watchedSeconds - last.$1).abs();
+        if (elapsed < _writeInterval && delta < _writeProgressDelta) return;
+      }
+      _writeThrottle[key] = (watchedSeconds, now);
+    }
+
     await _db.from('watch_progress').upsert({
       'student_id':      studentId,
       'lecture_id':      lectureId,
@@ -338,17 +360,162 @@ class ProgressService {
 
   // ───────────────────────────────────────────────────────────
   //  6. All course progresses for a student's enrolled courses
+  //
+  //  Uses 4 queries total regardless of how many courses are
+  //  enrolled (previously fired 4×N sequential queries).
+  //  At 5k students × 5 courses this reduces DB load from
+  //  100k queries → 20k queries on the home-screen load.
   // ───────────────────────────────────────────────────────────
   Future<List<CourseProgress>> fetchAllCourseProgresses({
     required String studentId,
     required List<String> courseIds,
   }) async {
-    return Future.wait(
-      courseIds.map((id) => fetchCourseProgress(
-            studentId: studentId,
-            courseId: id,
-          )),
-    );
+    if (courseIds.isEmpty) return [];
+    try {
+      // Query 1: all subjects for all enrolled courses
+      final subjectRows = await _db
+          .from('subjects')
+          .select('id, course_id')
+          .inFilter('course_id', courseIds);
+
+      if (subjectRows.isEmpty) {
+        return courseIds
+            .map((id) => CourseProgress(courseId: id, totalLectures: 0, completedLectures: 0))
+            .toList();
+      }
+
+      final subjectIds = subjectRows.map((s) => s['id'] as String).toList();
+
+      // Query 2: all chapters for those subjects
+      final chapterRows = await _db
+          .from('chapters')
+          .select('id, subject_id')
+          .inFilter('subject_id', subjectIds);
+
+      if (chapterRows.isEmpty) {
+        return courseIds
+            .map((id) => CourseProgress(courseId: id, totalLectures: 0, completedLectures: 0))
+            .toList();
+      }
+
+      final chapterIds = chapterRows.map((c) => c['id'] as String).toList();
+
+      // Query 3: all lectures for those chapters
+      final lectureRows = await _db
+          .from('lectures')
+          .select('id, chapter_id, title, description, video_url, notes_url, duration_seconds, is_free, sort_order, created_at')
+          .inFilter('chapter_id', chapterIds);
+
+      if (lectureRows.isEmpty) {
+        return courseIds
+            .map((id) => CourseProgress(courseId: id, totalLectures: 0, completedLectures: 0))
+            .toList();
+      }
+
+      final allLectureIds = lectureRows.map((l) => l['id'] as String).toList();
+
+      // Query 4: all watch_progress rows for this student across all those lectures
+      final progressRows = await _db
+          .from('watch_progress')
+          .select('lecture_id, completed, watched_seconds, updated_at')
+          .eq('student_id', studentId)
+          .inFilter('lecture_id', allLectureIds);
+
+      // Build lookup maps in-memory
+      final subjectToCourse = <String, String>{
+        for (final s in subjectRows) s['id'] as String: s['course_id'] as String,
+      };
+      final chapterToSubject = <String, String>{
+        for (final c in chapterRows) c['id'] as String: c['subject_id'] as String,
+      };
+      final lecturesByCourse = <String, List<Map<String, dynamic>>>{};
+
+      for (final l in lectureRows) {
+        final chapterId = l['chapter_id'] as String;
+        final subjectId = chapterToSubject[chapterId];
+        if (subjectId == null) continue;
+        final courseId = subjectToCourse[subjectId];
+        if (courseId == null) continue;
+        lecturesByCourse
+            .putIfAbsent(courseId, () => [])
+            .add(Map<String, dynamic>.from(l as Map));
+      }
+
+      final progressMap = <String, Map<String, dynamic>>{
+        for (final r in progressRows)
+          r['lecture_id'] as String: Map<String, dynamic>.from(r as Map),
+      };
+
+      // Compute CourseProgress for each course from in-memory maps
+      return courseIds.map((courseId) {
+        final lectures = lecturesByCourse[courseId] ?? [];
+        if (lectures.isEmpty) {
+          return CourseProgress(courseId: courseId, totalLectures: 0, completedLectures: 0);
+        }
+
+        int completedCount = 0;
+        String? lastLectureId;
+        DateTime? lastUpdated;
+        int lastWatchedSecs = 0;
+
+        for (final l in lectures) {
+          final lid = l['id'] as String;
+          final prog = progressMap[lid];
+          if (prog != null) {
+            if (prog['completed'] as bool? ?? false) completedCount++;
+            final updAt = DateTime.tryParse(prog['updated_at'] as String? ?? '');
+            if (updAt != null &&
+                (lastUpdated == null || updAt.isAfter(lastUpdated))) {
+              lastUpdated = updAt;
+              lastLectureId = lid;
+              lastWatchedSecs = prog['watched_seconds'] as int? ?? 0;
+            }
+          }
+        }
+
+        LectureModel? lastLecture;
+        if (lastLectureId != null) {
+          final isCompleted =
+              progressMap[lastLectureId]?['completed'] as bool? ?? false;
+          final lectureRow = lectures.firstWhere(
+            (l) => l['id'] == lastLectureId,
+            orElse: () => <String, dynamic>{},
+          );
+          if (!isCompleted && lectureRow.isNotEmpty) {
+            lastLecture = LectureModel.fromJson({
+              ...lectureRow,
+              'attachments': <dynamic>[],
+            });
+          } else {
+            final incomplete = lectures.where((l) {
+              final lid = l['id'] as String;
+              return !(progressMap[lid]?['completed'] as bool? ?? false);
+            }).toList();
+            if (incomplete.isNotEmpty) {
+              final next = Map<String, dynamic>.from(incomplete.first as Map);
+              lastLecture = LectureModel.fromJson({
+                ...next,
+                'attachments': <dynamic>[],
+              });
+              lastWatchedSecs =
+                  progressMap[lastLecture.id]?['watched_seconds'] as int? ?? 0;
+            }
+          }
+        }
+
+        return CourseProgress(
+          courseId: courseId,
+          totalLectures: lectures.length,
+          completedLectures: completedCount,
+          lastWatchedLecture: lastLecture,
+          lastWatchedSeconds: lastWatchedSecs,
+        );
+      }).toList();
+    } catch (_) {
+      return courseIds
+          .map((id) => CourseProgress(courseId: id, totalLectures: 0, completedLectures: 0))
+          .toList();
+    }
   }
 
   // ───────────────────────────────────────────────────────────

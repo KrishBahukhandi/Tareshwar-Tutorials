@@ -43,6 +43,12 @@ Future<void> main() async {
     return true;
   };
 
+  // Limit Flutter's image cache to prevent OOM at scale.
+  // Default is unbounded; 5k students loading course thumbnails
+  // can exhaust device RAM without these limits.
+  PaintingBinding.instance.imageCache.maximumSize = 150;       // max 150 images
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 80 * 1024 * 1024; // 80 MB
+
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

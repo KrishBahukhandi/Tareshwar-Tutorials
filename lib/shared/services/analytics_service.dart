@@ -245,13 +245,11 @@ class AnalyticsService {
     required String liveClassId,
     required String liveClassTitle,
     String? courseId,
-    String? batchId,
   }) =>
       _track(AnalyticsEvent.liveClassJoined, {
         'live_class_id':    liveClassId,
         'live_class_title': liveClassTitle,
         if (courseId != null) 'course_id': courseId,
-        if (batchId != null) 'batch_id': batchId,
       });
 
   // ══════════════════════════════════════════════════════════

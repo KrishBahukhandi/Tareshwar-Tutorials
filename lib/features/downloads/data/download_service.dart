@@ -98,9 +98,9 @@ class DownloadService {
 
     final enrollments = await _client
         .from('enrollments')
-        .select('id, batches!inner(course_id)')
+        .select('id')
         .eq('student_id', studentId)
-        .eq('batches.course_id', courseId)
+        .eq('course_id', courseId)
         .limit(1);
     return enrollments.isNotEmpty;
   }

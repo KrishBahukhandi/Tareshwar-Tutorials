@@ -2,15 +2,9 @@
 //  admin_courses_service.dart
 //  Supabase data layer for admin course management.
 //
-//  Provides:
-//    • Full course list (all teachers) with search + filter
-//    • Rich course detail: batches, enrollments, teacher info
-//    • Create course  (admin assigns teacher)
-//    • Update course  (title, description, price, thumbnail,
-//                      category, teacher, published state)
-//    • Delete course  (cascades batches / enrollments)
-//    • Toggle published state
-//    • Fetch teacher list (for assign-teacher picker)
+//  Courses now carry capacity, timeline, class level and
+//  subjects overview directly (batches removed).
+//  Students enroll into courses via enrollments.course_id.
 // ─────────────────────────────────────────────────────────────
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -32,19 +26,24 @@ final adminCoursesServiceProvider =
 
 /// Flat row used in the course list table.
 class AdminCourseListItem {
-  final String   id;
-  final String   title;
-  final String   description;
-  final String   teacherId;
-  final String   teacherName;
-  final double   price;
-  final String?  thumbnailUrl;
-  final String?  categoryTag;
-  final bool     isPublished;
-  final int      totalBatches;
-  final int      totalEnrollments;
-  final int      totalLectures;
-  final DateTime createdAt;
+  final String        id;
+  final String        title;
+  final String        description;
+  final String        teacherId;
+  final String        teacherName;
+  final double        price;
+  final String?       thumbnailUrl;
+  final bool          isPublished;
+  final bool          isActive;
+  final String?       categoryTag;
+  final String?       classLevel;
+  final int           maxStudents;
+  final DateTime?     startDate;
+  final DateTime?     endDate;
+  final List<String>  subjectsOverview;
+  final int           enrolledCount;
+  final int           totalLectures;
+  final DateTime      createdAt;
 
   const AdminCourseListItem({
     required this.id,
@@ -54,53 +53,53 @@ class AdminCourseListItem {
     required this.teacherName,
     required this.price,
     this.thumbnailUrl,
-    this.categoryTag,
     required this.isPublished,
-    required this.totalBatches,
-    required this.totalEnrollments,
-    required this.totalLectures,
-    required this.createdAt,
-  });
-}
-
-/// Rich course detail including batches.
-class AdminCourseDetail {
-  final AdminCourseListItem course;
-  final List<AdminCourseBatch> batches;
-
-  const AdminCourseDetail({
-    required this.course,
-    required this.batches,
-  });
-}
-
-/// Batch summary inside a course detail.
-class AdminCourseBatch {
-  final String   id;
-  final String   batchName;
-  final String?  description;
-  final DateTime startDate;
-  final DateTime? endDate;
-  final int      maxStudents;
-  final int      enrolledCount;
-  final bool     isActive;
-  final DateTime createdAt;
-
-  const AdminCourseBatch({
-    required this.id,
-    required this.batchName,
-    this.description,
-    required this.startDate,
-    this.endDate,
-    required this.maxStudents,
-    required this.enrolledCount,
     required this.isActive,
+    this.categoryTag,
+    this.classLevel,
+    required this.maxStudents,
+    this.startDate,
+    this.endDate,
+    required this.subjectsOverview,
+    required this.enrolledCount,
+    required this.totalLectures,
     required this.createdAt,
   });
 
   double get fillPercent =>
       maxStudents > 0 ? (enrolledCount / maxStudents).clamp(0.0, 1.0) : 0.0;
+
   bool get isFull => enrolledCount >= maxStudents;
+}
+
+/// Enrollment record inside a course detail view.
+class AdminCourseEnrollment {
+  final String   id;
+  final String   studentId;
+  final String   studentName;
+  final String   studentEmail;
+  final DateTime enrolledAt;
+  final double   progressPercent;
+
+  const AdminCourseEnrollment({
+    required this.id,
+    required this.studentId,
+    required this.studentName,
+    required this.studentEmail,
+    required this.enrolledAt,
+    required this.progressPercent,
+  });
+}
+
+/// Rich course detail.
+class AdminCourseDetail {
+  final AdminCourseListItem      course;
+  final List<AdminCourseEnrollment> enrollments;
+
+  const AdminCourseDetail({
+    required this.course,
+    required this.enrollments,
+  });
 }
 
 /// Minimal teacher info for the teacher picker.
@@ -128,10 +127,9 @@ class AdminCoursesService {
     String search = '',
     bool? publishedFilter,
   }) async {
-    // Fetch courses joined with teacher name
-    var query = _db
-        .from('courses')
-        .select('*, users!teacher_id(id, name)');
+    var query = _db.from('courses').select(
+      '*, users!teacher_id(id, name)',
+    );
 
     if (publishedFilter != null) {
       query = query.eq('is_published', publishedFilter);
@@ -139,66 +137,38 @@ class AdminCoursesService {
 
     final rows = await query.order('created_at', ascending: false);
 
-    // Fetch batch counts per course
-    final courseIds =
-        rows.map((r) => r['id'] as String).toList();
-
-    Map<String, int> batchCounts    = {};
-    Map<String, int> enrollCounts   = {};
-    Map<String, int> lectureCounts  = {};
+    // Fetch lecture counts via subjects → chapters → lectures
+    final courseIds = rows.map((r) => r['id'] as String).toList();
+    Map<String, int> lectureCounts = {};
 
     if (courseIds.isNotEmpty) {
-      final [batchRows, subjectRows] = await Future.wait([
-        _db
-            .from('batches')
-            .select('id, course_id')
-            .inFilter('course_id', courseIds),
-        _db
-            .from('subjects')
-            .select('id, course_id')
-            .inFilter('course_id', courseIds),
-      ]);
+      final subjectRows = await _db
+          .from('subjects')
+          .select('id, course_id')
+          .inFilter('course_id', courseIds);
 
-      for (final b in batchRows as List) {
-        final cid = b['course_id'] as String;
-        batchCounts[cid] = (batchCounts[cid] ?? 0) + 1;
-      }
+      final subjectIds =
+          (subjectRows as List).map((s) => s['id'] as String).toList();
 
-      // Enrollments via batches
-      final batchIds = (batchRows as List)
-          .map((b) => b['id'] as String)
-          .toList();
-      if (batchIds.isNotEmpty) {
-        final eRows = await _db
-            .from('enrollments')
-            .select('batch_id, batches!batch_id(course_id)')
-            .inFilter('batch_id', batchIds);
-        for (final e in eRows) {
-          final cid = (e['batches'] as Map?)?['course_id'] as String?;
-          if (cid != null) {
-            enrollCounts[cid] = (enrollCounts[cid] ?? 0) + 1;
-          }
-        }
-      }
-
-      // Lecture count via subjects → chapters → lectures
-      final subjectIds = (subjectRows as List)
-          .map((s) => s['id'] as String)
-          .toList();
       if (subjectIds.isNotEmpty) {
         final chapterRows = await _db
             .from('chapters')
             .select('id, subject_id')
             .inFilter('subject_id', subjectIds);
+
         final chapterIds =
             (chapterRows as List).map((c) => c['id'] as String).toList();
+
         if (chapterIds.isNotEmpty) {
           final lectureRows = await _db
               .from('lectures')
               .select('id, chapter_id, chapters!chapter_id(subject_id, subjects!subject_id(course_id))')
               .inFilter('chapter_id', chapterIds);
+
           for (final l in lectureRows) {
-            final cid = ((l['chapters'] as Map?)?['subjects'] as Map?)?['course_id'] as String?;
+            final cid =
+                ((l['chapters'] as Map?)?['subjects'] as Map?)?['course_id']
+                    as String?;
             if (cid != null) {
               lectureCounts[cid] = (lectureCounts[cid] ?? 0) + 1;
             }
@@ -208,9 +178,9 @@ class AdminCoursesService {
     }
 
     List<AdminCourseListItem> items = rows.map((r) {
-      final map         = Map<String, dynamic>.from(r as Map);
-      final teacherMap  = map['users'] as Map?;
-      final id          = map['id'] as String;
+      final map        = Map<String, dynamic>.from(r as Map);
+      final teacherMap = map['users'] as Map?;
+      final id         = map['id'] as String;
       return AdminCourseListItem(
         id:               id,
         title:            map['title'] as String,
@@ -219,11 +189,23 @@ class AdminCoursesService {
         teacherName:      teacherMap?['name'] as String? ?? '—',
         price:            (map['price'] as num?)?.toDouble() ?? 0,
         thumbnailUrl:     map['thumbnail_url'] as String?,
-        categoryTag:      map['category_tag'] as String?,
         isPublished:      map['is_published'] as bool? ?? false,
-        totalBatches:     batchCounts[id]   ?? 0,
-        totalEnrollments: enrollCounts[id]  ?? 0,
-        totalLectures:    lectureCounts[id] ?? 0,
+        isActive:         map['is_active'] as bool? ?? true,
+        categoryTag:      map['category_tag'] as String?,
+        classLevel:       map['class_level'] as String?,
+        maxStudents:      map['max_students'] as int? ?? 50,
+        startDate:        map['start_date'] != null
+            ? DateTime.tryParse(map['start_date'] as String)
+            : null,
+        endDate:          map['end_date'] != null
+            ? DateTime.tryParse(map['end_date'] as String)
+            : null,
+        subjectsOverview: (map['subjects_overview'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            [],
+        enrolledCount:    (map['enrolled_count'] ?? map['total_students']) as int? ?? 0,
+        totalLectures:    lectureCounts[id] ?? (map['total_lectures'] as int? ?? 0),
         createdAt:        DateTime.parse(map['created_at'] as String),
       );
     }).toList();
@@ -235,7 +217,7 @@ class AdminCoursesService {
           .where((c) =>
               c.title.toLowerCase().contains(lq) ||
               c.teacherName.toLowerCase().contains(lq) ||
-              (c.categoryTag ?? '').toLowerCase().contains(lq))
+              (c.classLevel ?? '').toLowerCase().contains(lq))
           .toList();
     }
     return items;
@@ -244,58 +226,36 @@ class AdminCoursesService {
   // ── Fetch single course detail ────────────────────────────
   Future<AdminCourseDetail> fetchCourseDetail(String courseId) async {
     final results = await Future.wait([
-      // Course + teacher
       _db
           .from('courses')
           .select('*, users!teacher_id(id, name)')
           .eq('id', courseId)
           .single(),
-      // Batches for this course
       _db
-          .from('batches')
-          .select('*')
+          .from('enrollments')
+          .select('*, users!student_id(name, email)')
           .eq('course_id', courseId)
-          .order('created_at', ascending: false),
+          .order('enrolled_at', ascending: false),
     ]);
 
-    final courseMap  = Map<String, dynamic>.from(results[0] as Map);
-    final batchRows  = results[1] as List;
-    final teacherMap = courseMap['users'] as Map?;
+    final courseMap    = Map<String, dynamic>.from(results[0] as Map);
+    final enrollRows   = results[1] as List;
+    final teacherMap   = courseMap['users'] as Map?;
 
-    // Enrollment counts per batch
-    final batchIds =
-        batchRows.map((b) => b['id'] as String).toList();
-    Map<String, int> enrollCounts = {};
-    if (batchIds.isNotEmpty) {
-      final eRows = await _db
-          .from('enrollments')
-          .select('batch_id')
-          .inFilter('batch_id', batchIds);
-      for (final e in eRows) {
-        final bid = e['batch_id'] as String;
-        enrollCounts[bid] = (enrollCounts[bid] ?? 0) + 1;
-      }
-    }
-
-    final batches = batchRows.map((r) {
-      final bm  = Map<String, dynamic>.from(r as Map);
-      final bid = bm['id'] as String;
-      return AdminCourseBatch(
-        id:           bid,
-        batchName:    bm['batch_name'] as String,
-        description:  bm['description'] as String?,
-        startDate:    DateTime.parse(bm['start_date'] as String),
-        endDate:      bm['end_date'] != null
-            ? DateTime.parse(bm['end_date'] as String)
-            : null,
-        maxStudents:  bm['max_students'] as int? ?? 50,
-        enrolledCount: enrollCounts[bid] ?? 0,
-        isActive:     bm['is_active'] as bool? ?? true,
-        createdAt:    DateTime.parse(bm['created_at'] as String),
+    final enrollments = enrollRows.map((r) {
+      final em  = Map<String, dynamic>.from(r as Map);
+      final um  = em['users'] as Map?;
+      return AdminCourseEnrollment(
+        id:              em['id'] as String,
+        studentId:       em['student_id'] as String,
+        studentName:     um?['name'] as String? ?? '—',
+        studentEmail:    um?['email'] as String? ?? '—',
+        enrolledAt:      DateTime.parse(em['enrolled_at'] as String),
+        progressPercent: (em['progress_percent'] as num?)?.toDouble() ?? 0,
       );
     }).toList();
 
-    final cid = courseMap['id'] as String;
+    final cid  = courseMap['id'] as String;
     final item = AdminCourseListItem(
       id:               cid,
       title:            courseMap['title'] as String,
@@ -304,18 +264,30 @@ class AdminCoursesService {
       teacherName:      teacherMap?['name'] as String? ?? '—',
       price:            (courseMap['price'] as num?)?.toDouble() ?? 0,
       thumbnailUrl:     courseMap['thumbnail_url'] as String?,
-      categoryTag:      courseMap['category_tag'] as String?,
       isPublished:      courseMap['is_published'] as bool? ?? false,
-      totalBatches:     batches.length,
-      totalEnrollments: enrollCounts.values.fold(0, (a, b) => a + b),
+      isActive:         courseMap['is_active'] as bool? ?? true,
+      categoryTag:      courseMap['category_tag'] as String?,
+      classLevel:       courseMap['class_level'] as String?,
+      maxStudents:      courseMap['max_students'] as int? ?? 50,
+      startDate:        courseMap['start_date'] != null
+          ? DateTime.tryParse(courseMap['start_date'] as String)
+          : null,
+      endDate:          courseMap['end_date'] != null
+          ? DateTime.tryParse(courseMap['end_date'] as String)
+          : null,
+      subjectsOverview: (courseMap['subjects_overview'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      enrolledCount:    enrollments.length,
       totalLectures:    courseMap['total_lectures'] as int? ?? 0,
       createdAt:        DateTime.parse(courseMap['created_at'] as String),
     );
 
-    return AdminCourseDetail(course: item, batches: batches);
+    return AdminCourseDetail(course: item, enrollments: enrollments);
   }
 
-  // ── Fetch all teachers (for picker) ──────────────────────
+  // ── Fetch teachers (for picker) ───────────────────────────
   Future<List<AdminTeacherOption>> fetchTeachers() async {
     final rows = await _db
         .from('users')
@@ -332,26 +304,64 @@ class AdminCoursesService {
     }).toList();
   }
 
+  // ── Enroll a student into a course ───────────────────────
+  Future<void> enrollStudent({
+    required String studentId,
+    required String courseId,
+  }) async {
+    // Guard: capacity
+    final course = await _db
+        .from('courses')
+        .select('max_students, enrolled_count')
+        .eq('id', courseId)
+        .single();
+    final max     = course['max_students'] as int? ?? 50;
+    final current = course['enrolled_count'] as int? ?? 0;
+    if (current >= max) {
+      throw StateError('Course is full ($max max students)');
+    }
+
+    await _db.from('enrollments').insert({
+      'student_id': studentId,
+      'course_id':  courseId,
+    });
+  }
+
+  // ── Remove a student from a course ───────────────────────
+  Future<void> removeEnrollment(String enrollmentId) async {
+    await _db.from('enrollments').delete().eq('id', enrollmentId);
+  }
+
   // ── Create course ─────────────────────────────────────────
   Future<CourseModel> createCourse({
-    required String teacherId,
-    required String title,
-    required String description,
-    required double price,
-    String? thumbnailUrl,
-    String? categoryTag,
-    bool isPublished = false,
+    required String  teacherId,
+    required String  title,
+    required String  description,
+    required double  price,
+    String?          thumbnailUrl,
+    String?          classLevel,
+    int              maxStudents      = 50,
+    DateTime?        startDate,
+    DateTime?        endDate,
+    List<String>     subjectsOverview = const [],
+    bool             isPublished      = false,
+    bool             isActive         = true,
   }) async {
     final data = await _db
         .from('courses')
         .insert({
-          'teacher_id':    teacherId,
-          'title':         title,
-          'description':   description,
-          'price':         price,
-          'thumbnail_url': thumbnailUrl,
-          'category_tag':  categoryTag,
-          'is_published':  isPublished,
+          'teacher_id':        teacherId,
+          'title':             title,
+          'description':       description,
+          'price':             price,
+          'thumbnail_url':     thumbnailUrl,
+          'class_level':       classLevel,
+          'max_students':      maxStudents,
+          'start_date':        startDate?.toIso8601String().substring(0, 10),
+          'end_date':          endDate?.toIso8601String().substring(0, 10),
+          'subjects_overview': subjectsOverview,
+          'is_published':      isPublished,
+          'is_active':         isActive,
         })
         .select()
         .single();
@@ -360,25 +370,35 @@ class AdminCoursesService {
 
   // ── Update course ─────────────────────────────────────────
   Future<CourseModel> updateCourse({
-    required String courseId,
-    required String teacherId,
-    required String title,
-    required String description,
-    required double price,
-    String? thumbnailUrl,
-    String? categoryTag,
-    required bool isPublished,
+    required String  courseId,
+    required String  teacherId,
+    required String  title,
+    required String  description,
+    required double  price,
+    String?          thumbnailUrl,
+    String?          classLevel,
+    int              maxStudents      = 50,
+    DateTime?        startDate,
+    DateTime?        endDate,
+    List<String>     subjectsOverview = const [],
+    required bool    isPublished,
+    required bool    isActive,
   }) async {
     final data = await _db
         .from('courses')
         .update({
-          'teacher_id':    teacherId,
-          'title':         title,
-          'description':   description,
-          'price':         price,
-          'thumbnail_url': thumbnailUrl,
-          'category_tag':  categoryTag,
-          'is_published':  isPublished,
+          'teacher_id':        teacherId,
+          'title':             title,
+          'description':       description,
+          'price':             price,
+          'thumbnail_url':     thumbnailUrl,
+          'class_level':       classLevel,
+          'max_students':      maxStudents,
+          'start_date':        startDate?.toIso8601String().substring(0, 10),
+          'end_date':          endDate?.toIso8601String().substring(0, 10),
+          'subjects_overview': subjectsOverview,
+          'is_published':      isPublished,
+          'is_active':         isActive,
         })
         .eq('id', courseId)
         .select()
@@ -387,12 +407,8 @@ class AdminCoursesService {
   }
 
   // ── Toggle published ──────────────────────────────────────
-  Future<void> togglePublished(String courseId,
-      {required bool publish}) async {
-    await _db
-        .from('courses')
-        .update({'is_published': publish})
-        .eq('id', courseId);
+  Future<void> togglePublished(String courseId, {required bool publish}) async {
+    await _db.from('courses').update({'is_published': publish}).eq('id', courseId);
   }
 
   // ── Delete course ─────────────────────────────────────────

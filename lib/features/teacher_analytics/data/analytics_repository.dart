@@ -38,23 +38,17 @@ class AnalyticsRepository {
       );
     }
 
-    // Enrollments (via batches)
-    final batchRows = await _db
-        .from('batches')
-        .select('id')
+    // Enrollments (direct by course_id)
+    final enrollRows = await _db
+        .from('enrollments')
+        .select('student_id, progress_percent')
         .inFilter('course_id', courseIds);
-    final batchIds =
-        batchRows.map((r) => r['id'] as String).toList();
 
     int totalStudents = 0;
     double avgCompletion = 0;
-    if (batchIds.isNotEmpty) {
-      final enrollRows = await _db
-          .from('enrollments')
-          .select('student_id, progress_percent')
-          .inFilter('batch_id', batchIds);
+    {
       final unique =
-          enrollRows.map((r) => r['student_id'] as String).toSet();
+          (enrollRows as List).map((r) => r['student_id'] as String).toSet();
       totalStudents = unique.length;
       if (enrollRows.isNotEmpty) {
         final total = enrollRows.fold<double>(
@@ -147,20 +141,12 @@ class AnalyticsRepository {
       List<String> courseIds) async {
     if (courseIds.isEmpty) return [];
 
-    final batchRows = await _db
-        .from('batches')
-        .select('id')
-        .inFilter('course_id', courseIds);
-    final batchIds =
-        batchRows.map((r) => r['id'] as String).toList();
-    if (batchIds.isEmpty) return [];
-
     final since =
         DateTime.now().subtract(const Duration(days: 180));
     final rows = await _db
         .from('enrollments')
         .select('enrolled_at')
-        .inFilter('batch_id', batchIds)
+        .inFilter('course_id', courseIds)
         .gte('enrolled_at', since.toIso8601String())
         .order('enrolled_at', ascending: true);
 
@@ -193,21 +179,15 @@ class AnalyticsRepository {
       List<String> courseIds) async {
     if (courseIds.isEmpty) return [];
 
-    final batchRows = await _db
-        .from('batches')
-        .select('id')
-        .inFilter('course_id', courseIds);
-    final batchIds =
-        batchRows.map((r) => r['id'] as String).toList();
-    if (batchIds.isEmpty) return [];
-
     // Enrollments with student name + progress
     final enrollRows = await _db
         .from('enrollments')
         .select('student_id, progress_percent, users!student_id(name)')
-        .inFilter('batch_id', batchIds);
+        .inFilter('course_id', courseIds);
 
-    // Group by student (may be in multiple batches)
+    if ((enrollRows as List).isEmpty) return [];
+
+    // Group by student
     final Map<String, _StudentAcc> acc = {};
     for (final r in enrollRows) {
       final sid = r['student_id'] as String;
@@ -291,27 +271,20 @@ class AnalyticsRepository {
 
   Future<CourseAnalyticsData> fetchCourseAnalytics(
       String courseId, String courseTitle) async {
-    // Batches for this course
-    final batchRows = await _db
-        .from('batches')
-        .select('id')
+    // Enrollments for this course
+    final enrollRows = await _db
+        .from('enrollments')
+        .select(
+            'student_id, progress_percent, enrolled_at, users!student_id(name)')
         .eq('course_id', courseId);
-    final batchIds =
-        batchRows.map((r) => r['id'] as String).toList();
 
     List<StudentProgressRow> studentProgress = [];
     int completedStudents = 0;
     double avgProgress = 0;
 
-    if (batchIds.isNotEmpty) {
-      final enrollRows = await _db
-          .from('enrollments')
-          .select(
-              'student_id, progress_percent, enrolled_at, users!student_id(name)')
-          .inFilter('batch_id', batchIds);
-
+    {
       final Map<String, _StudentAcc> acc = {};
-      for (final r in enrollRows) {
+      for (final r in enrollRows as List) {
         final sid = r['student_id'] as String;
         final name =
             (r['users'] as Map?)?.get('name') as String? ?? 'Student';
@@ -341,7 +314,7 @@ class AnalyticsRepository {
           studentName: v.name,
           progressPercent: prog,
           enrolledAt: v.enrolledAt ?? DateTime.now(),
-          lecturesWatched: 0, // aggregated separately
+          lecturesWatched: 0,
           totalLectures: 0,
         ));
       }
@@ -508,31 +481,20 @@ class AnalyticsRepository {
     }
 
     // --- Course progress ---
-    final batchRows = await _db
-        .from('batches')
-        .select('id, course_id')
-        .inFilter('course_id', courseIds);
-    final batchIds =
-        batchRows.map((r) => r['id'] as String).toList();
-
-    final Map<String, String> batchToCourse = {
-      for (final r in batchRows) r['id'] as String: r['course_id'] as String,
-    };
-
     List<CourseProgressItem> courseProgress = [];
-    if (batchIds.isNotEmpty) {
+    {
       final enrollRows = await _db
           .from('enrollments')
-          .select('batch_id, progress_percent, enrolled_at')
+          .select('course_id, progress_percent, enrolled_at')
           .eq('student_id', studentId)
-          .inFilter('batch_id', batchIds);
+          .inFilter('course_id', courseIds);
 
       // Fetch course titles
       final courseRows = await _db
           .from('courses')
           .select('id, title, total_lectures')
           .inFilter('id', courseIds);
-      final Map<String, String> courseTitle = {
+      final Map<String, String> courseTitleMap = {
         for (final r in courseRows) r['id'] as String: r['title'] as String,
       };
       final Map<String, int> courseLectures = {
@@ -540,12 +502,11 @@ class AnalyticsRepository {
           r['id'] as String: (r['total_lectures'] as int? ?? 0),
       };
 
-      for (final r in enrollRows) {
-        final bid = r['batch_id'] as String;
-        final cid = batchToCourse[bid] ?? '';
+      for (final r in enrollRows as List) {
+        final cid = r['course_id'] as String;
         courseProgress.add(CourseProgressItem(
           courseId: cid,
-          courseTitle: courseTitle[cid] ?? 'Course',
+          courseTitle: courseTitleMap[cid] ?? 'Course',
           progressPercent: (r['progress_percent'] as num).toDouble(),
           lecturesWatched: 0,
           totalLectures: courseLectures[cid] ?? 0,

@@ -16,7 +16,6 @@ class AdminAnalyticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync  = ref.watch(adminStatsProvider);
     final coursesAsync = ref.watch(adminCoursesProvider);
-    final batchesAsync = ref.watch(adminBatchListProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -24,7 +23,6 @@ class AdminAnalyticsScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(adminStatsProvider);
           ref.invalidate(adminCoursesProvider);
-          ref.invalidate(adminBatchListProvider);
         },
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -105,13 +103,6 @@ class AdminAnalyticsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 12),
                             _HorizontalBar(
-                              label: 'Active Batches',
-                              count: stats.activeBatches,
-                              total: stats.totalBatches,
-                              color: AppColors.accent,
-                            ),
-                            const SizedBox(height: 12),
-                            _HorizontalBar(
                               label: 'Resolved Doubts',
                               count: stats.resolvedDoubts,
                               total: stats.totalDoubts,
@@ -163,34 +154,35 @@ class AdminAnalyticsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 20),
 
-              // ── Batch fill rates ───────────────────────────
-              batchesAsync.when(
+              // ── Course fill rates ──────────────────────────
+              coursesAsync.when(
                 loading: () => const SizedBox.shrink(),
                 error: (e, _) => const SizedBox.shrink(),
-                data: (batches) {
-                  final active =
-                      batches.where((b) => b.isActive).toList();
-                  if (active.isEmpty) return const SizedBox.shrink();
+                data: (courses) {
+                  final withCapacity = courses
+                      .where((c) => c.maxStudents > 0 && c.isPublished)
+                      .toList();
+                  if (withCapacity.isEmpty) return const SizedBox.shrink();
                   return AdminTableCard(
-                    title: 'Active Batch Fill Rates',
+                    title: 'Course Fill Rates',
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
-                        children: active.take(8).map((b) {
+                        children: withCapacity.take(8).map((c) {
                           return Padding(
                             padding:
                                 const EdgeInsets.only(bottom: 10),
                             child: _HorizontalBar(
-                              label: b.batchName,
-                              count: b.enrolledCount,
-                              total: b.maxStudents,
-                              color: b.fillPercent >= 1.0
+                              label: c.title,
+                              count: c.enrolledCount,
+                              total: c.maxStudents,
+                              color: c.fillPercent >= 1.0
                                   ? AppColors.error
-                                  : b.fillPercent >= 0.8
+                                  : c.fillPercent >= 0.8
                                       ? AppColors.warning
                                       : AppColors.success,
                               suffix:
-                                  '${b.enrolledCount}/${b.maxStudents}',
+                                  '${c.enrolledCount}/${c.maxStudents}',
                             ),
                           );
                         }).toList(),

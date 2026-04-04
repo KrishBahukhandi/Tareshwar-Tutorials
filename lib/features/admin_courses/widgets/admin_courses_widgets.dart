@@ -390,16 +390,10 @@ class TeacherPickerDropdown extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(t.name, style: AppTextStyles.labelMedium),
-                        Text(t.email,
-                            style: AppTextStyles.bodySmall
-                                .copyWith(fontSize: 11),
-                            overflow: TextOverflow.ellipsis),
-                      ],
+                    child: Text(
+                      '${t.name}  •  ${t.email}',
+                      style: AppTextStyles.labelMedium,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

@@ -70,25 +70,34 @@ class AdminCourseFormNotifier
     required String description,
     required double price,
     String? thumbnailUrl,
-    String? categoryTag,
+    String? classLevel,
+    int maxStudents = 50,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subjectsOverview = const [],
     bool isPublished = false,
+    bool isActive = true,
   }) async {
     state = state.copyWith(isSubmitting: true, success: false);
     try {
       await ref.read(adminCoursesServiceProvider).createCourse(
-            teacherId:    teacherId,
-            title:        title,
-            description:  description,
-            price:        price,
-            thumbnailUrl: thumbnailUrl,
-            categoryTag:  categoryTag,
-            isPublished:  isPublished,
+            teacherId:        teacherId,
+            title:            title,
+            description:      description,
+            price:            price,
+            thumbnailUrl:     thumbnailUrl,
+            classLevel:       classLevel,
+            maxStudents:      maxStudents,
+            startDate:        startDate,
+            endDate:          endDate,
+            subjectsOverview: subjectsOverview,
+            isPublished:      isPublished,
+            isActive:         isActive,
           );
       ref.invalidate(adminCourseListProvider);
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
-      state = state.copyWith(
-          isSubmitting: false, error: e.toString());
+      state = state.copyWith(isSubmitting: false, error: e.toString());
     }
   }
 
@@ -99,27 +108,36 @@ class AdminCourseFormNotifier
     required String description,
     required double price,
     String? thumbnailUrl,
-    String? categoryTag,
+    String? classLevel,
+    int maxStudents = 50,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subjectsOverview = const [],
     required bool isPublished,
+    required bool isActive,
   }) async {
     state = state.copyWith(isSubmitting: true, success: false);
     try {
       await ref.read(adminCoursesServiceProvider).updateCourse(
-            courseId:     courseId,
-            teacherId:    teacherId,
-            title:        title,
-            description:  description,
-            price:        price,
-            thumbnailUrl: thumbnailUrl,
-            categoryTag:  categoryTag,
-            isPublished:  isPublished,
+            courseId:         courseId,
+            teacherId:        teacherId,
+            title:            title,
+            description:      description,
+            price:            price,
+            thumbnailUrl:     thumbnailUrl,
+            classLevel:       classLevel,
+            maxStudents:      maxStudents,
+            startDate:        startDate,
+            endDate:          endDate,
+            subjectsOverview: subjectsOverview,
+            isPublished:      isPublished,
+            isActive:         isActive,
           );
       ref.invalidate(adminCourseListProvider);
       ref.invalidate(adminCourseDetailProvider(courseId));
       state = state.copyWith(isSubmitting: false, success: true);
     } catch (e) {
-      state = state.copyWith(
-          isSubmitting: false, error: e.toString());
+      state = state.copyWith(isSubmitting: false, error: e.toString());
     }
   }
 }

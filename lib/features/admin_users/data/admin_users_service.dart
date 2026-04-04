@@ -4,8 +4,8 @@
 //
 //  Provides:
 //    • Paginated user lists with search (students / teachers)
-//    • Full user-detail profile including enrolled courses,
-//      batch memberships and test-attempt counts
+//    • Full user-detail profile including enrolled courses
+//      and test-attempt counts
 //    • Suspend / unsuspend (toggle is_active)
 //    • Role promotion / demotion
 //    • Permanent user deletion
@@ -20,15 +20,13 @@ import '../../../shared/services/supabase_service.dart';
 //  DTO: full user profile for the detail view
 // ─────────────────────────────────────────────────────────────
 class AdminUserDetail {
-  final UserModel user;
+  final UserModel              user;
   final List<AdminUserCourse>  enrolledCourses;
-  final List<AdminUserBatch>   batchMemberships;
   final int                    testAttemptCount;
 
   const AdminUserDetail({
     required this.user,
     required this.enrolledCourses,
-    required this.batchMemberships,
     required this.testAttemptCount,
   });
 }
@@ -49,35 +47,17 @@ class AdminUserCourse {
   });
 }
 
-class AdminUserBatch {
-  final String   batchId;
-  final String   batchName;
-  final String   courseTitle;
-  final bool     isActive;
-  final DateTime enrolledAt;
-
-  const AdminUserBatch({
-    required this.batchId,
-    required this.batchName,
-    required this.courseTitle,
-    required this.isActive,
-    required this.enrolledAt,
-  });
-}
-
 // ─────────────────────────────────────────────────────────────
 //  DTO: teacher detail (courses taught)
 // ─────────────────────────────────────────────────────────────
 class AdminTeacherDetail {
   final UserModel            user;
   final List<AdminUserCourse> coursesTaught;
-  final int                   totalBatches;
   final int                   totalStudents;
 
   const AdminTeacherDetail({
     required this.user,
     required this.coursesTaught,
-    required this.totalBatches,
     required this.totalStudents,
   });
 }
@@ -136,13 +116,12 @@ class AdminUsersService {
     final results = await Future.wait([
       // Base user
       _db.from('users').select().eq('id', userId).single(),
-      // Enrollments → batch → course → teacher
+      // Enrollments → course → teacher
       _db
           .from('enrollments')
           .select(
               'id, enrolled_at, progress_percent, '
-              'batches!batch_id(id, batch_name, is_active, '
-              'courses!course_id(id, title, users!teacher_id(name)))')
+              'courses!course_id(id, title, users!teacher_id(name))')
           .eq('student_id', userId)
           .order('enrolled_at', ascending: false),
       // Test attempt count
@@ -158,20 +137,15 @@ class AdminUsersService {
     final attemptRows = results[2] as List;
 
     final courses  = <AdminUserCourse>[];
-    final batches  = <AdminUserBatch>[];
 
     for (final r in enrollRows) {
       final map       = Map<String, dynamic>.from(r as Map);
-      final batchMap  = map['batches'] as Map?;
-      final courseMap = batchMap?['courses'] as Map?;
+      final courseMap = map['courses'] as Map?;
       final teacherMap = courseMap?['users'] as Map?;
 
-      final batchId    = batchMap?['id']         as String? ?? '';
-      final batchName  = batchMap?['batch_name'] as String? ?? '—';
-      final batchActive= batchMap?['is_active']  as bool?   ?? true;
-      final courseId   = courseMap?['id']        as String? ?? '';
-      final courseTitle= courseMap?['title']     as String? ?? '—';
-      final teacherName= teacherMap?['name']     as String?;
+      final courseId   = courseMap?['id']    as String? ?? '';
+      final courseTitle= courseMap?['title'] as String? ?? '—';
+      final teacherName= teacherMap?['name'] as String?;
       final progress   = (map['progress_percent'] as num?)?.toDouble() ?? 0.0;
       final enrolledAt = DateTime.parse(
           map['enrolled_at'] as String? ?? DateTime.now().toIso8601String());
@@ -183,20 +157,11 @@ class AdminUsersService {
         progressPercent: progress,
         enrolledAt:      enrolledAt,
       ));
-
-      batches.add(AdminUserBatch(
-        batchId:    batchId,
-        batchName:  batchName,
-        courseTitle:courseTitle,
-        isActive:   batchActive,
-        enrolledAt: enrolledAt,
-      ));
     }
 
     return AdminUserDetail(
       user:             user,
       enrolledCourses:  courses,
-      batchMemberships: batches,
       testAttemptCount: attemptRows.length,
     );
   }
@@ -220,22 +185,13 @@ class AdminUsersService {
 
     final courseIds = courseRows.map((r) => r['id'] as String).toList();
 
-    int totalBatches  = 0;
     int totalStudents = 0;
 
     if (courseIds.isNotEmpty) {
-      final [batchRows, enrollRows] = await Future.wait([
-        _db
-            .from('batches')
-            .select('id')
-            .inFilter('course_id', courseIds),
-        _db
-            .from('enrollments')
-            .select('id, batches!batch_id(course_id)')
-            .inFilter(
-                'batches.course_id', courseIds),
-      ]);
-      totalBatches  = (batchRows as List).length;
+      final enrollRows = await _db
+          .from('enrollments')
+          .select('id')
+          .inFilter('course_id', courseIds);
       totalStudents = (enrollRows as List).length;
     }
 
@@ -252,7 +208,6 @@ class AdminUsersService {
     return AdminTeacherDetail(
       user:          user,
       coursesTaught: courses,
-      totalBatches:  totalBatches,
       totalStudents: totalStudents,
     );
   }

@@ -17,20 +17,18 @@ class TeacherCourseStats {
   final int subjectCount;
   final int chapterCount;
   final int lectureCount;
-  final int batchCount;
   final int enrollmentCount;
 
   const TeacherCourseStats({
     required this.subjectCount,
     required this.chapterCount,
     required this.lectureCount,
-    required this.batchCount,
     required this.enrollmentCount,
   });
 
   bool get canPublish => lectureCount > 0;
   bool get canDelete =>
-      subjectCount == 0 && batchCount == 0 && enrollmentCount == 0;
+      subjectCount == 0 && enrollmentCount == 0;
 }
 
 class TeacherCourseRepository {
@@ -125,26 +123,16 @@ class TeacherCourseRepository {
           .inFilter('chapter_id', chapterIds);
     }
 
-    final batches = await _db
-        .from('batches')
+    final enrollments = await _db
+        .from('enrollments')
         .select('id')
         .eq('course_id', courseId);
-    final batchIds = batches.map((row) => row['id'] as String).toList();
-
-    List<Map<String, dynamic>> enrollments = const [];
-    if (batchIds.isNotEmpty) {
-      enrollments = await _db
-          .from('enrollments')
-          .select('id')
-          .inFilter('batch_id', batchIds);
-    }
 
     return TeacherCourseStats(
       subjectCount: subjects.length,
       chapterCount: chapters.length,
       lectureCount: lectures.length,
-      batchCount: batches.length,
-      enrollmentCount: enrollments.length,
+      enrollmentCount: (enrollments as List).length,
     );
   }
 
@@ -505,33 +493,22 @@ class TeacherCourseRepository {
   }) async {
     await _requireTeacherOwnsCourse(courseId, teacherId);
     final data = await _db
-        .from('batches')
-        .select(
-          'id, batch_name, enrollments(student_id, enrolled_at, users!student_id(name, email, avatar_url))',
-        )
-        .eq('course_id', courseId);
+        .from('enrollments')
+        .select('student_id, enrolled_at, users!student_id(name, email, avatar_url)')
+        .eq('course_id', courseId)
+        .order('enrolled_at', ascending: false);
 
-    final students = <EnrolledStudentInfo>[];
-    for (final batch in data) {
-      final batchName = batch['batch_name'] as String? ?? '';
-      final enrollments = batch['enrollments'] as List<dynamic>? ?? [];
-      for (final enr in enrollments) {
-        final user = enr['users'] as Map<String, dynamic>?;
-        students.add(
-          EnrolledStudentInfo(
-            studentId: enr['student_id'] as String,
-            name: user?['name'] as String? ?? 'Unknown',
-            email: user?['email'] as String? ?? '',
-            avatarUrl: user?['avatar_url'] as String?,
-            batchName: batchName,
-            enrolledAt:
-                DateTime.tryParse(enr['enrolled_at'] as String? ?? '') ??
-                DateTime.now(),
-          ),
-        );
-      }
-    }
-    return students;
+    return (data as List).map((enr) {
+      final user = enr['users'] as Map<String, dynamic>?;
+      return EnrolledStudentInfo(
+        studentId: enr['student_id'] as String,
+        name: user?['name'] as String? ?? 'Unknown',
+        email: user?['email'] as String? ?? '',
+        avatarUrl: user?['avatar_url'] as String?,
+        enrolledAt: DateTime.tryParse(enr['enrolled_at'] as String? ?? '') ??
+            DateTime.now(),
+      );
+    }).toList();
   }
 
   // ════════════════════════════════════════════════════════
@@ -559,7 +536,6 @@ class EnrolledStudentInfo {
   final String name;
   final String email;
   final String? avatarUrl;
-  final String batchName;
   final DateTime enrolledAt;
 
   const EnrolledStudentInfo({
@@ -567,7 +543,6 @@ class EnrolledStudentInfo {
     required this.name,
     required this.email,
     this.avatarUrl,
-    required this.batchName,
     required this.enrolledAt,
   });
 }

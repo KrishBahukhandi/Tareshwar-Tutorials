@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 //  admin_announcements_screen.dart
-//  Admin: Create and view platform-wide or batch-scoped announcements.
+//  Admin: Create and view platform-wide or course-scoped announcements.
 // ─────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,15 +14,8 @@ import '../../../../shared/services/auth_service.dart';
 // ── Providers ─────────────────────────────────────────────────
 final _announcementsListProvider =
     FutureProvider.autoDispose<List<AnnouncementModel>>((ref) async {
-  final db = ref.watch(adminServiceProvider);
-  // Fetch recent announcements from admin service (re-use supabase client)
-  // We'll do a direct query via the admin service's supabase client
-  return db.fetchAnnouncements();
+  return ref.watch(adminServiceProvider).fetchAnnouncements();
 });
-
-final _batchListForAnnouncementsProvider =
-    FutureProvider.autoDispose<List<AdminBatchRow>>((ref) =>
-        ref.watch(adminServiceProvider).fetchAllBatches());
 
 // ─────────────────────────────────────────────────────────────
 class AdminAnnouncementsScreen extends ConsumerStatefulWidget {
@@ -107,7 +100,7 @@ class _AdminAnnouncementsScreenState
                       style: AppTextStyles.headlineSmall),
                   const SizedBox(height: 8),
                   Text(
-                    'Broadcast a message to all students or a batch',
+                    'Broadcast a message to all students or a course',
                     style: AppTextStyles.bodyMedium
                         .copyWith(color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
@@ -170,7 +163,7 @@ class _AnnouncementCard extends StatelessWidget {
                   child: Icon(
                     isPlatformWide
                         ? Icons.campaign_rounded
-                        : Icons.groups_rounded,
+                        : Icons.menu_book_rounded,
                     color: isPlatformWide
                         ? AppColors.primary
                         : AppColors.secondary,
@@ -192,7 +185,7 @@ class _AnnouncementCard extends StatelessWidget {
                           Text(
                             isPlatformWide
                                 ? '📢 Platform-wide'
-                                : '👥 ${announcement.batchName ?? 'Batch'}',
+                                : '📚 ${announcement.courseTitle ?? 'Course'}',
                             style: AppTextStyles.bodySmall
                                 .copyWith(
                                     color: isPlatformWide
@@ -271,8 +264,6 @@ class _ComposeAnnouncementSheetState
   final _form = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
-  bool _platformWide = true;
-  String? _selectedBatchId;
   bool _sending = false;
 
   @override
@@ -294,7 +285,6 @@ class _ComposeAnnouncementSheetState
             authorId: user.id,
             title: _titleCtrl.text.trim(),
             body: _bodyCtrl.text.trim(),
-            batchId: _platformWide ? null : _selectedBatchId,
           );
       widget.onSent();
       if (mounted) {
@@ -318,12 +308,10 @@ class _ComposeAnnouncementSheetState
 
   @override
   Widget build(BuildContext context) {
-    final batchesAsync = ref.watch(_batchListForAnnouncementsProvider);
     final mediaQuery = MediaQuery.of(context);
 
     return Padding(
-      padding:
-          EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -338,8 +326,7 @@ class _ComposeAnnouncementSheetState
             ),
           ),
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 Expanded(
@@ -384,72 +371,6 @@ class _ComposeAnnouncementSheetState
                               ? 'Required'
                               : null,
                     ),
-                    const SizedBox(height: 16),
-                    // Target selector
-                    Row(
-                      children: [
-                        Text('Send to:',
-                            style: AppTextStyles.labelLarge),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    RadioGroup<bool>(
-                      groupValue: _platformWide,
-                      onChanged: (v) =>
-                          setState(() => _platformWide = v ?? true),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: RadioListTile<bool>(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('All Students'),
-                              subtitle: const Text('Platform-wide'),
-                              value: true,
-                              activeColor: AppColors.primary,
-                            ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<bool>(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Specific Batch'),
-                              subtitle: const Text('Batch only'),
-                              value: false,
-                              activeColor: AppColors.secondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!_platformWide) ...[
-                      const SizedBox(height: 8),
-                      batchesAsync.when(
-                        loading: () => const Center(
-                            child: CircularProgressIndicator()),
-                        error: (_, e) =>
-                            const Text('Could not load batches'),
-                        data: (batches) =>
-                            DropdownButtonFormField<String>(
-                          initialValue: _selectedBatchId,
-                          decoration: const InputDecoration(
-                              labelText: 'Select Batch *'),
-                          isExpanded: true,
-                          items: batches
-                              .map((b) => DropdownMenuItem(
-                                    value: b.id,
-                                    child: Text(b.batchName,
-                                        overflow:
-                                            TextOverflow.ellipsis),
-                                  ))
-                              .toList(),
-                          onChanged: (v) => setState(
-                              () => _selectedBatchId = v),
-                          validator: (v) =>
-                              (!_platformWide && v == null)
-                                  ? 'Select a batch'
-                                  : null,
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 20),
                     ElevatedButton.icon(
                       onPressed: _sending ? null : _send,
