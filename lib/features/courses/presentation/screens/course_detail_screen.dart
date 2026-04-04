@@ -17,6 +17,7 @@ import '../../../../core/utils/app_router.dart';
 import '../../../../shared/models/models.dart';
 import '../../../../shared/services/auth_service.dart' show currentUserProvider;
 import '../../../../shared/services/app_providers.dart' show enrolledCoursesProvider;
+import '../../../../shared/services/course_service.dart' show courseServiceProvider;
 import '../providers/course_providers.dart'
     show courseDetailProvider, courseSubjectsProvider, courseProgressProvider, CourseProgress;
 import '../widgets/subject_tile.dart';
@@ -287,7 +288,7 @@ class _CourseHero extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 //  Info card: stats + description + enroll CTA
 // ─────────────────────────────────────────────────────────────
-class _CourseInfoCard extends StatelessWidget {
+class _CourseInfoCard extends ConsumerStatefulWidget {
   final CourseModel course;
   final CourseProgress? progress;
   final bool isEnrolled;
@@ -298,6 +299,46 @@ class _CourseInfoCard extends StatelessWidget {
     required this.courseId,
     this.progress,
   });
+
+  @override
+  ConsumerState<_CourseInfoCard> createState() => _CourseInfoCardState();
+}
+
+class _CourseInfoCardState extends ConsumerState<_CourseInfoCard> {
+  bool _enrolling = false;
+
+  Future<void> _enrollFree() async {
+    final user = ref.read(currentUserProvider).valueOrNull;
+    if (user == null) return;
+
+    setState(() => _enrolling = true);
+    try {
+      await ref.read(courseServiceProvider).enrollStudent(
+            studentId: user.id,
+            courseId: widget.courseId,
+          );
+      ref.invalidate(enrolledCoursesProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('You are now enrolled in ${widget.course.title}!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Enrollment failed. Please try again.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enrolling = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -314,20 +355,20 @@ class _CourseInfoCard extends StatelessWidget {
             spacing: AppSpacing.xs,
             runSpacing: AppSpacing.xs,
             children: [
-              if (course.totalLectures != null)
+              if (widget.course.totalLectures != null)
                 _StatChip(
                   icon: Icons.play_lesson_outlined,
-                  label: '${course.totalLectures} Lectures',
+                  label: '${widget.course.totalLectures} Lectures',
                 ),
-              if (course.totalStudents != null)
+              if (widget.course.totalStudents != null)
                 _StatChip(
                   icon: Icons.people_outline_rounded,
-                  label: '${course.totalStudents} Students',
+                  label: '${widget.course.totalStudents} Students',
                 ),
-              if (course.rating != null)
+              if (widget.course.rating != null)
                 _StatChip(
                   icon: Icons.star_rounded,
-                  label: course.rating!.toStringAsFixed(1),
+                  label: widget.course.rating!.toStringAsFixed(1),
                   iconColor: AppColors.warning,
                 ),
             ],
@@ -338,38 +379,42 @@ class _CourseInfoCard extends StatelessWidget {
           Text('About this Course', style: AppTextStyles.headlineSmall),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            course.description,
+            widget.course.description,
             style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.textSecondary, height: 1.65),
           ),
           const SizedBox(height: AppSpacing.lg),
 
           // ── Progress bar ──────────────────────────
-          if (progress != null && progress!.totalLectures > 0) ...[
+          if (widget.progress != null && widget.progress!.totalLectures > 0) ...[
             CourseProgressBar(
-              percent: progress!.percent,
-              completedLectures: progress!.completedLectures,
-              totalLectures: progress!.totalLectures,
+              percent: widget.progress!.percent,
+              completedLectures: widget.progress!.completedLectures,
+              totalLectures: widget.progress!.totalLectures,
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
 
           // ── Enroll / Continue CTA ─────────────────
-          if (isEnrolled)
+          if (widget.isEnrolled)
             PrimaryButton(
               label: 'Continue Learning',
               icon: Icons.play_circle_outline_rounded,
               onTap: () => context.push(
-                AppRoutes.lectureListPath(courseId),
+                AppRoutes.lectureListPath(widget.courseId),
               ),
+            )
+          else if (widget.course.price == 0)
+            PrimaryButton(
+              label: _enrolling ? 'Enrolling...' : 'Enroll for FREE',
+              icon: Icons.school_rounded,
+              onTap: _enrolling ? null : _enrollFree,
             )
           else
             PrimaryButton(
-              label: course.price == 0
-                  ? 'Enroll for FREE — Contact Us'
-                  : 'Enroll — ₹${course.price.toStringAsFixed(0)}',
+              label: 'Enroll — ₹${widget.course.price.toStringAsFixed(0)}',
               icon: Icons.school_rounded,
-              onTap: () => _showEnrollSheet(context, course),
+              onTap: () => _showEnrollSheet(context, widget.course),
             ),
         ],
       ),
