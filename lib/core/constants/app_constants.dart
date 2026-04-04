@@ -12,6 +12,10 @@ class AppConstants {
   static const String authRedirectUrl =
       String.fromEnvironment('AUTH_REDIRECT_URL');
 
+  // ── Web API (Next.js on Vercel) ───────────────────────────
+  static const String webApiBaseUrl =
+      String.fromEnvironment('WEB_API_URL', defaultValue: 'https://tareshwar-web.vercel.app');
+
   // ── App Info ──────────────────────────────────────────────
   static const String appName = 'Tareshwar Tutorials';
   static const String appVersion = '1.0.0';

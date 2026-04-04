@@ -8,8 +8,10 @@
 //  not batch-specific (e.g. fetching a chapter's lectures for a
 //  player screen once the student is already enrolled).
 // ─────────────────────────────────────────────────────────────
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/constants/app_constants.dart';
 import '../models/models.dart';
 import 'storage_access_service.dart';
 import 'supabase_service.dart';
@@ -119,16 +121,35 @@ class CourseService {
     return rows.isNotEmpty;
   }
 
-  /// Enroll the current student into a free course via RPC.
+  /// Enroll the current student into a free course via Next.js API.
   Future<EnrollmentModel> enrollStudent({
     required String studentId,
     required String courseId,
   }) async {
-    final result = await _client.rpc(
-      'enroll_student_free',
-      params: {'p_course_id': courseId},
+    final session = _client.auth.currentSession;
+    if (session == null) throw Exception('Not authenticated');
+
+    final dio = Dio();
+    final response = await dio.post(
+      '${AppConstants.webApiBaseUrl}/api/enroll-free',
+      data: {'courseId': courseId},
+      options: Options(
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+        validateStatus: (status) => true,
+      ),
     );
-    final row = Map<String, dynamic>.from(result as Map);
+
+    if (response.statusCode != null && response.statusCode! >= 400) {
+      final errorMsg = response.data is Map
+          ? (response.data['error'] ?? 'Enrollment failed')
+          : 'Enrollment failed';
+      throw Exception(errorMsg);
+    }
+
+    final row = Map<String, dynamic>.from(response.data as Map);
     return EnrollmentModel.fromJson(row);
   }
 
