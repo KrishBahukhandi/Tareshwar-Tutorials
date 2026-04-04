@@ -21,7 +21,7 @@ class DashboardRemoteDataSource {
         .select('''
           progress_percent,
           enrolled_at,
-          courses!course_id(
+          courses(
             id, title, thumbnail_url, category_tag, total_lectures,
             users!teacher_id(name)
           )

@@ -87,7 +87,7 @@ class CourseService {
   Future<List<CourseModel>> fetchEnrolledCourses(String studentId) async {
     final rows = await _client
         .from('enrollments')
-        .select('course_id, courses!inner(*, users!teacher_id(name))')
+        .select('course_id, courses(*, users!teacher_id(name))')
         .eq('student_id', studentId);
 
     final courses = <CourseModel>[];
@@ -119,17 +119,17 @@ class CourseService {
     return rows.isNotEmpty;
   }
 
-  /// Enroll a student into a course (admin/teacher only — enforced by RLS).
+  /// Enroll the current student into a free course via RPC.
   Future<EnrollmentModel> enrollStudent({
     required String studentId,
     required String courseId,
   }) async {
-    final row = await _client
-        .from('enrollments')
-        .insert({'student_id': studentId, 'course_id': courseId})
-        .select('*, courses!course_id(title)')
-        .single();
-    return EnrollmentModel.fromJson(Map<String, dynamic>.from(row as Map));
+    final result = await _client.rpc(
+      'enroll_student_free',
+      params: {'p_course_id': courseId},
+    );
+    final row = Map<String, dynamic>.from(result as Map);
+    return EnrollmentModel.fromJson(row);
   }
 
   /// Remove an enrollment by ID.
@@ -141,7 +141,7 @@ class CourseService {
   Future<List<EnrollmentModel>> fetchCourseEnrollments(String courseId) async {
     final rows = await _client
         .from('enrollments')
-        .select('*, users!student_id(name, email)')
+        .select('*, users(name, email)')
         .eq('course_id', courseId)
         .order('enrolled_at', ascending: false);
     return rows
@@ -153,7 +153,7 @@ class CourseService {
   Future<List<EnrollmentModel>> fetchStudentEnrollments(String studentId) async {
     final rows = await _client
         .from('enrollments')
-        .select('*, courses!course_id(title)')
+        .select('*, courses(title)')
         .eq('student_id', studentId)
         .order('enrolled_at', ascending: false);
     return rows
