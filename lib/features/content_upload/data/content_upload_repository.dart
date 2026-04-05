@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -126,16 +127,28 @@ class ContentUploadRepository {
     required String name,
     required int sortOrder,
   }) async {
-    await _requireTeacherOwnsCourse(courseId, teacherId);
-    final data = await _db
-        .from('subjects')
-        .insert({'course_id': courseId, 'name': name, 'sort_order': sortOrder})
-        .select()
-        .single();
-    return SubjectModel.fromJson({
-      ...Map<String, dynamic>.from(data),
-      'chapters': <dynamic>[],
-    });
+    final session = _db.auth.currentSession;
+    if (session == null) throw StateError('Not authenticated.');
+
+    final dio = Dio();
+    final response = await dio.post(
+      '${AppConstants.webApiBaseUrl}/api/create-subject',
+      data: {
+        'courseId': courseId,
+        'name': name,
+        'sortOrder': sortOrder,
+      },
+      options: Options(
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+      ),
+    );
+
+    return SubjectModel.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
   }
 
   Future<List<SubjectModel>> fetchSubjects(
@@ -164,20 +177,28 @@ class ContentUploadRepository {
     required String name,
     required int sortOrder,
   }) async {
-    await _requireTeacherOwnsSubject(subjectId, teacherId);
-    final data = await _db
-        .from('chapters')
-        .insert({
-          'subject_id': subjectId,
-          'name': name,
-          'sort_order': sortOrder,
-        })
-        .select()
-        .single();
-    return ChapterModel.fromJson({
-      ...Map<String, dynamic>.from(data),
-      'lectures': <dynamic>[],
-    });
+    final session = _db.auth.currentSession;
+    if (session == null) throw StateError('Not authenticated.');
+
+    final dio = Dio();
+    final response = await dio.post(
+      '${AppConstants.webApiBaseUrl}/api/create-chapter',
+      data: {
+        'subjectId': subjectId,
+        'name': name,
+        'sortOrder': sortOrder,
+      },
+      options: Options(
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+      ),
+    );
+
+    return ChapterModel.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
   }
 
   Future<List<ChapterModel>> fetchChapters(
@@ -243,23 +264,35 @@ class ContentUploadRepository {
 
     onProgress?.call(0.92);
 
-    final data = await _db
-        .from('lectures')
-        .insert({
-          'chapter_id': chapterId,
-          'title': title,
-          'description': description,
-          'video_url': videoUrl,
-          'notes_url': notesUrl,
-          'duration_seconds': durationSeconds,
-          'is_free': isFree,
-          'sort_order': sortOrder,
-        })
-        .select()
-        .single();
+    final session = _db.auth.currentSession;
+    if (session == null) throw StateError('Not authenticated.');
+
+    final dio = Dio();
+    final response = await dio.post(
+      '${AppConstants.webApiBaseUrl}/api/create-lecture',
+      data: {
+        'chapterId': chapterId,
+        'courseId': courseId,
+        'title': title,
+        'description': description,
+        'videoUrl': videoUrl,
+        'notesUrl': notesUrl,
+        'durationSeconds': durationSeconds,
+        'isFree': isFree,
+        'sortOrder': sortOrder,
+      },
+      options: Options(
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+      ),
+    );
 
     onProgress?.call(1.0);
-    return LectureModel.fromJson(Map<String, dynamic>.from(data));
+    return LectureModel.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
   }
 
   Future<List<LectureModel>> fetchLectures(
